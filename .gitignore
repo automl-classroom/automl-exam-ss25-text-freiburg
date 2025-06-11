@@ -1,0 +1,8 @@
+*.pkl
+*.obj
+
+output/
+results/
+.data/
+data/
+*logs/
