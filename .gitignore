@@ -3,6 +3,9 @@
 
 dataset_prep/
 
+*__pycache__/
+*egg-info*
+
 output/
 results/
 .data/
