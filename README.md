@@ -27,6 +27,25 @@ your_project/
 pip install -r requirements.txt
 ```
 
+2. Download and prepare datasets:
+```bash
+# Quick setup (recommended)
+python setup_data.py
+
+# Or manually with Hugging Face datasets
+python download_with_huggingface.py
+
+# Or manually with direct downloads
+python download_datasets.py
+```
+
+3. Verify data setup:
+```bash
+python verify_data.py
+```
+
+For detailed setup instructions, see [DATA_SETUP_GUIDE.md](DATA_SETUP_GUIDE.md).
+
 ## Usage
 
 The system supports three datasets:
@@ -71,9 +90,13 @@ text,label
 ## Automatic Approach Selection
 
 The system automatically selects the best approach based on dataset size:
-- **Small datasets (< 1000 samples)**: Bag-of-Words + Neural Network
-- **Medium datasets (1000-5000 samples)**: TF-IDF + Neural Network  
-- **Large datasets (> 5000 samples)**: LSTM with embeddings
+- **Small datasets (< 500 samples)**: Bag-of-Words + Neural Network
+- **Medium-small datasets (500-2000 samples)**: TF-IDF + Neural Network  
+- **Medium datasets (2000-10000 samples)**: LSTM with embeddings
+- **Medium-large datasets (10000-20000 samples)**: Fine-tuned pretrained models (DistilBERT)
+- **Large datasets (> 20000 samples)**: Custom transformer architecture
+
+See [APPROACHES_GUIDE.md](APPROACHES_GUIDE.md) for detailed explanations of each approach.
 
 ## Features
 

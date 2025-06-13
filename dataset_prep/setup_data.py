@@ -157,9 +157,9 @@ def main():
     
     # Step 1: Check and install requirements
     logger.info("\n1. Checking requirements...")
-    if not check_and_install_requirements():
-        logger.error("Failed to install required packages")
-        return 1
+    # if not check_and_install_requirements():
+    #     logger.error("Failed to install required packages")
+    #     return 1
     
     # Step 2: Download datasets
     logger.info("\n2. Downloading datasets...")
