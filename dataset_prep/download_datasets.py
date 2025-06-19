@@ -1,5 +1,5 @@
 """
-Download and prepare AG News, IMDB, and Amazon datasets for text classification.
+Download and prepare AG News, IMDB, Amazon, Yelp, and DBpedia datasets for text classification.
 Creates train/test splits with fixed seeds for reproducibility.
 """
 
@@ -16,6 +16,18 @@ import argparse
 from tqdm import tqdm
 import re
 import json
+
+try:
+    from datasets import load_dataset
+    HF_AVAILABLE = True
+except ImportError:
+    HF_AVAILABLE = False
+    print(
+        "Hugging Face datasets not available. "
+        "Some datasets will be unavailable. "
+        "Install with: pip install datasets."
+    )
+
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -80,31 +92,41 @@ class DatasetDownloader:
         text = ' '.join(text.split())
         return text.strip()
     
-    def save_splits(self, df: pd.DataFrame, dataset_name: str, 
-                   test_size: float = 0.2) -> None:
-        """Create and save train/test splits."""
+    def shuffle_within_split(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Shuffle data within a split using consistent seeding.
+        
+        Args:
+            df: DataFrame to shuffle
+            
+        Returns:
+            Shuffled DataFrame with reset index
+        """
+        return df.sample(n=len(df), random_state=self.seed).reset_index(drop=True)
+    
+    def save_train_test_directly(
+        self,
+        train_df: pd.DataFrame,
+        test_df: pd.DataFrame,
+        dataset_name: str,
+    ) -> None:
+        """Save train and test DataFrames directly without re-splitting."""
         output_dir = self.data_dir / dataset_name
         output_dir.mkdir(parents=True, exist_ok=True)
         
-        # Create stratified split
-        train_df, test_df = train_test_split(
-            df, 
-            test_size=test_size, 
-            random_state=self.seed,
-            stratify=df['label']
-        )
-        
-        # Save to CSV
         train_path = output_dir / "train.csv"
         test_path = output_dir / "test.csv"
         
         train_df.to_csv(train_path, index=False)
         test_df.to_csv(test_path, index=False)
         
+        with open(output_dir / ".seed.txt", "w") as f:
+            f.writelines(f"seed_used: {self.seed}")
+
         logger.info(f"Saved {dataset_name}:")
         logger.info(f"  Train: {len(train_df)} samples -> {train_path}")
         logger.info(f"  Test: {len(test_df)} samples -> {test_path}")
-        logger.info(f"  Classes: {sorted(df['label'].unique())}")
+        logger.info(f"  Classes: {sorted(train_df['label'].unique())}")
 
 
 class AGNewsDownloader(DatasetDownloader):
@@ -114,13 +136,16 @@ class AGNewsDownloader(DatasetDownloader):
         logger.info("Preparing AG News dataset...")
         
         # AG News URLs
+        # source: https://github.com/mhjabreel/CharCnn_Keras/blob/master/data/ag_news_csv/readme.txt
+        # 4 classes
+        # 120k train + 7.6k test samples
         urls = {
             'train': 'https://raw.githubusercontent.com/mhjabreel/CharCnn_Keras/master/data/ag_news_csv/train.csv',
             'test': 'https://raw.githubusercontent.com/mhjabreel/CharCnn_Keras/master/data/ag_news_csv/test.csv'
         }
         
         # Download files
-        temp_dir = self.data_dir / "temp" / "ag_news"
+        temp_dir = self.data_dir / ".cache" / "ag_news"
         train_path = temp_dir / "train_raw.csv"
         test_path = temp_dir / "test_raw.csv"
         
@@ -128,29 +153,31 @@ class AGNewsDownloader(DatasetDownloader):
         self.download_file(urls['test'], test_path)
         
         # Load and process
-        train_df = pd.read_csv(train_path, header=None, names=['label', 'title', 'description'])
-        test_df = pd.read_csv(test_path, header=None, names=['label', 'title', 'description'])
+        train_raw = pd.read_csv(train_path, header=None, names=['label', 'title', 'description'])
+        test_raw = pd.read_csv(test_path, header=None, names=['label', 'title', 'description'])
         
-        # Combine title and description, adjust labels to 0-based
+        # Process AG News data
         def process_ag_news(df):
             df['text'] = df['title'].fillna('') + ' ' + df['description'].fillna('')
             df['text'] = df['text'].apply(self.clean_text)
             df['label'] = df['label'] - 1  # Convert from 1-4 to 0-3
             return df[['text', 'label']].copy()
         
-        train_processed = process_ag_news(train_df)
-        test_processed = process_ag_news(test_df)
-        
-        # Combine and create our own splits
-        combined_df = pd.concat([train_processed, test_processed], ignore_index=True)
+        train_df = process_ag_news(train_raw)
+        test_df = process_ag_news(test_raw)
         
         # Remove empty texts
-        combined_df = combined_df[combined_df['text'].str.strip() != '']
+        train_df = train_df[train_df['text'].str.strip() != '']
+        test_df = test_df[test_df['text'].str.strip() != '']
         
-        logger.info(f"AG News - Total samples: {len(combined_df)}")
-        logger.info(f"AG News - Class distribution:\n{combined_df['label'].value_counts().sort_index()}")
+        logger.info(f"AG News - Train samples: {len(train_df)}")
+        logger.info(f"AG News - Test samples: {len(test_df)}")
+        logger.info(f"AG News - Total samples: {len(train_df) + len(test_df)}")
+        logger.info(f"AG News - Class distribution:\n{train_df['label'].value_counts().sort_index()}")
         
-        self.save_splits(combined_df, 'ag_news')
+        train_df = self.shuffle_within_split(train_df)
+        test_df = self.shuffle_within_split(test_df)
+        self.save_train_test_directly(train_df, test_df, 'ag_news')
 
 
 class IMDBDownloader(DatasetDownloader):
@@ -160,9 +187,12 @@ class IMDBDownloader(DatasetDownloader):
         logger.info("Preparing IMDB dataset...")
         
         # IMDB dataset URL
+        # source: https://huggingface.co/datasets/stanfordnlp/imdb#dataset-summary
+        # 2 classes
+        # 25k train + 25k test samples
         url = "https://ai.stanford.edu/~amaas/data/sentiment/aclImdb_v1.tar.gz"
-        archive_path = self.data_dir / "temp" / "aclImdb_v1.tar.gz"
-        extract_dir = self.data_dir / "temp" / "imdb_extracted"
+        archive_path = self.data_dir / ".cache" / "aclImdb_v1.tar.gz"
+        extract_dir = self.data_dir / ".cache" / "imdb_extracted"
         
         # Download and extract
         self.download_file(url, archive_path)
@@ -192,35 +222,46 @@ class IMDBDownloader(DatasetDownloader):
             return texts, labels
         
         # Load all data
-        all_texts = []
-        all_labels = []
-        
+        all_texts = {}
+        all_labels = {}
+
         for split in ['train', 'test']:
+            all_texts[split] = []
+            all_labels[split] = []
             split_dir = imdb_dir / split
             if split_dir.exists():
                 # Load positive reviews
                 pos_texts, pos_labels = load_imdb_split(split_dir, 'pos')
-                all_texts.extend(pos_texts)
-                all_labels.extend(pos_labels)
+                all_texts[split].extend(pos_texts)
+                all_labels[split].extend(pos_labels)
                 
                 # Load negative reviews
                 neg_texts, neg_labels = load_imdb_split(split_dir, 'neg')
-                all_texts.extend(neg_texts)
-                all_labels.extend(neg_labels)
+                all_texts[split].extend(neg_texts)
+                all_labels[split].extend(neg_labels)
         
-        # Create DataFrame
-        df = pd.DataFrame({
-            'text': all_texts,
-            'label': all_labels
+        # Create DataFrames
+        train_df = pd.DataFrame({
+            'text': all_texts["train"],
+            'label': all_labels["train"]
+        })
+        test_df = pd.DataFrame({
+            'text': all_texts["test"],
+            'label': all_labels["test"]
         })
         
         # Remove empty texts
-        df = df[df['text'].str.strip() != '']
+        train_df = train_df[train_df['text'].str.strip() != '']
+        test_df = test_df[test_df['text'].str.strip() != '']
         
-        logger.info(f"IMDB - Total samples: {len(df)}")
-        logger.info(f"IMDB - Class distribution:\n{df['label'].value_counts().sort_index()}")
+        logger.info(f"IMDB - Train samples: {len(train_df)}")
+        logger.info(f"IMDB - Test samples: {len(test_df)}")
+        logger.info(f"IMDB - Total samples: {len(train_df) + len(test_df)}")
+        logger.info(f"IMDB - Class distribution:\n{train_df['label'].value_counts().sort_index()}")
         
-        self.save_splits(df, 'imdb')
+        train_df = self.shuffle_within_split(train_df)
+        test_df = self.shuffle_within_split(test_df)
+        self.save_train_test_directly(train_df, test_df, 'imdb')
 
 
 class AmazonDownloader(DatasetDownloader):
@@ -231,19 +272,15 @@ class AmazonDownloader(DatasetDownloader):
         
         # Use Amazon product reviews for category classification
         # This uses a subset of Julian McAuley's Amazon review dataset
+        # source: https://snap.stanford.edu/data/web-Amazon.html
+        # 3 classes (converted from 1-5 star ratings)
         url = "http://snap.stanford.edu/data/amazon/productGraph/categoryFiles/reviews_Amazon_Instant_Video_5.json.gz"
         
-        # If the above URL doesn't work, we'll create a synthetic Amazon-like dataset
-        try:
-            self._download_real_amazon(url)
-        except Exception as e:
-            logger.warning(f"Could not download real Amazon data: {e}")
-            logger.info("Creating synthetic Amazon-like dataset...")
-            self._create_synthetic_amazon()
-    
+        self._download_real_amazon(url)
+
     def _download_real_amazon(self, url):
         """Download real Amazon dataset."""
-        archive_path = self.data_dir / "temp" / "amazon_reviews.json.gz"
+        archive_path = self.data_dir / ".cache" / "amazon_reviews.json.gz"
         
         # Download
         self.download_file(url, archive_path)
@@ -261,10 +298,6 @@ class AmazonDownloader(DatasetDownloader):
                         })
                 except json.JSONDecodeError:
                     continue
-                
-                # Limit to avoid memory issues
-                if len(reviews) >= 10000:
-                    break
         
         # Convert ratings to categories (1-2: negative, 3: neutral, 4-5: positive)
         df = pd.DataFrame(reviews)
@@ -282,132 +315,141 @@ class AmazonDownloader(DatasetDownloader):
         df['label'] = df['rating'].apply(rating_to_category)
         df = df[['text', 'label']].copy()
         
-        logger.info(f"Amazon - Total samples: {len(df)}")
-        logger.info(f"Amazon - Class distribution:\n{df['label'].value_counts().sort_index()}")
+        # Create train/test split ONCE (since Amazon doesn't have original splits)
+        train_df, test_df = train_test_split(
+            df, test_size=0.327, random_state=self.seed, stratify=df['label']
+        )
         
-        self.save_splits(df, 'amazon')
-    
-    def _create_synthetic_amazon(self):
-        """Create a larger synthetic Amazon-like dataset."""
-        np.random.seed(self.seed)
+        logger.info(f"Amazon - Train samples: {len(train_df)}")
+        logger.info(f"Amazon - Test samples: {len(test_df)}")
+        logger.info(f"Amazon - Total samples: {len(train_df) + len(test_df)}")
+        logger.info(f"Amazon - Class distribution:\n{train_df['label'].value_counts().sort_index()}")
         
-        # Product categories
-        categories = {
-            0: "Electronics",
-            1: "Books", 
-            2: "Clothing",
-            3: "Home & Kitchen",
-            4: "Sports & Outdoors"
-        }
-        
-        # Review templates for each category
-        templates = {
-            0: [  # Electronics
-                "This {product} works {quality}. The {feature} is {quality_adj}.",
-                "I {sentiment_verb} this {product}. {feature} {sentiment_desc}.",
-                "The {product} {performance}. Good value for money."
-            ],
-            1: [  # Books
-                "This book is {quality}. The {aspect} {sentiment_desc}.",
-                "I {sentiment_verb} reading this. The {aspect} was {quality_adj}.",
-                "Great {genre} book. {sentiment_phrase}."
-            ],
-            2: [  # Clothing
-                "The {item} fits {fit}. Material feels {quality_adj}.",
-                "I {sentiment_verb} this {item}. The {aspect} is {quality}.",
-                "Good quality {item}. {sentiment_phrase}."
-            ],
-            3: [  # Home & Kitchen
-                "This {item} is {quality}. Works {performance} in my kitchen.",
-                "I {sentiment_verb} this {item}. Very {quality_adj} for the price.",
-                "Great {item}. {sentiment_phrase}."
-            ],
-            4: [  # Sports
-                "This {item} is {quality} for {activity}. {sentiment_phrase}.",
-                "I {sentiment_verb} using this for {activity}. Very {quality_adj}.",
-                "Great {item} for sports. Good {aspect}."
-            ]
-        }
-        
-        # Word lists
-        products = {
-            0: ["phone", "laptop", "headphones", "speaker", "camera"],
-            1: ["novel", "textbook", "biography", "mystery", "romance"],
-            2: ["shirt", "pants", "dress", "jacket", "shoes"],
-            3: ["blender", "toaster", "pan", "knife", "plate"],
-            4: ["shoes", "ball", "racket", "weights", "mat"]
-        }
-        
-        features = ["design", "quality", "performance", "battery", "screen", "sound"]
-        qualities = ["excellent", "good", "average", "poor", "outstanding"]
-        quality_adjs = ["amazing", "decent", "terrible", "fantastic", "okay"]
-        sentiments = ["love", "like", "hate", "enjoy", "recommend"]
-        sentiment_phrases = [
-            "Highly recommend!", "Would buy again.", "Not worth it.", 
-            "Perfect for my needs.", "Could be better."
-        ]
-        
-        # Generate synthetic reviews
-        texts = []
-        labels = []
-        
-        # Generate balanced dataset
-        samples_per_class = 1000
-        
-        for label, category in categories.items():
-            for _ in range(samples_per_class):
-                template = np.random.choice(templates[label])
-                
-                # Fill template
-                review = template.format(
-                    product=np.random.choice(products.get(label, ["item"])),
-                    quality=np.random.choice(qualities),
-                    feature=np.random.choice(features),
-                    quality_adj=np.random.choice(quality_adjs),
-                    sentiment_verb=np.random.choice(sentiments),
-                    sentiment_desc=np.random.choice(["is great", "works well", "is poor", "is amazing"]),
-                    performance=np.random.choice(["well", "perfectly", "poorly", "excellently"]),
-                    aspect=np.random.choice(["quality", "design", "performance", "value"]),
-                    fit=np.random.choice(["well", "perfectly", "poorly", "great"]),
-                    item=np.random.choice(products.get(label, ["item"])),
-                    sentiment_phrase=np.random.choice(sentiment_phrases),
-                    activity=np.random.choice(["running", "gym", "hiking", "sports"]),
-                    genre=np.random.choice(["fiction", "mystery", "romance", "sci-fi"])
-                )
-                
-                # Add some random additional text
-                additional = " ".join([
-                    f"word_{np.random.randint(1, 1000)}" 
-                    for _ in range(np.random.randint(10, 30))
-                ])
-                
-                review += " " + additional
-                
-                texts.append(review)
-                labels.append(label)
-        
-        # Create DataFrame
-        df = pd.DataFrame({
-            'text': texts,
-            'label': labels
-        })
-        
-        # Shuffle
-        df = df.sample(frac=1, random_state=self.seed).reset_index(drop=True)
-        
-        logger.info(f"Amazon (synthetic) - Total samples: {len(df)}")
-        logger.info(f"Amazon (synthetic) - Class distribution:\n{df['label'].value_counts().sort_index()}")
-        
-        self.save_splits(df, 'amazon')
+        train_df = self.shuffle_within_split(train_df)
+        test_df = self.shuffle_within_split(test_df)
+        self.save_train_test_directly(train_df, test_df, 'amazon')
 
+
+class YelpDownloader(DatasetDownloader):
+    """Download and prepare Yelp Reviews dataset."""
+    
+    def download_and_prepare(self):
+        logger.info("Preparing Yelp Reviews (5-star) dataset...")
+        
+        # Yelp Reviews dataset
+        # source: https://huggingface.co/datasets/yelp_review_full
+        # 5 classes (1-5 star ratings, 0-indexed as 0-4)
+        # 650k train + 50k test samples originally
+        
+        if not HF_AVAILABLE:
+            logger.error("Hugging Face datasets required for Yelp dataset")
+            return
+            
+        self._download_real_yelp()
+    
+    def _download_real_yelp(self):
+        """Download real Yelp dataset using Hugging Face."""
+        logger.info("Downloading Yelp dataset from Hugging Face...")
+        
+        # Load dataset
+        dataset = load_dataset("yelp_review_full", cache_dir=self.data_dir / ".cache")
+        
+        # Convert to pandas
+        train_data = dataset['train'].to_pandas()
+        test_data = dataset['test'].to_pandas()
+        
+        # Clean up data
+        train_data = train_data.rename(columns={'text': 'text', 'label': 'label'})
+        test_data = test_data.rename(columns={'text': 'text', 'label': 'label'})
+        train_data['text'] = train_data['text'].astype(str).apply(self.clean_text)
+        test_data['text'] = test_data['text'].astype(str).apply(self.clean_text)
+        train_data['label'] = train_data['label'].astype(int)
+        test_data['label'] = test_data['label'].astype(int)
+        
+        # Remove empty texts
+        train_df = train_data[train_data['text'].str.strip() != '']
+        test_df = test_data[test_data['text'].str.strip() != '']
+        
+        logger.info(f"Yelp - Train samples: {len(train_df)}")
+        logger.info(f"Yelp - Test samples: {len(test_df)}")
+        logger.info(f"Yelp - Total samples: {len(train_df) + len(test_df)}")
+        logger.info(f"Yelp - Class distribution:\n{train_df['label'].value_counts().sort_index()}")
+        
+        train_df = self.shuffle_within_split(train_df)
+        test_df = self.shuffle_within_split(test_df)
+        self.save_train_test_directly(train_df, test_df, 'yelp')
+
+
+class DBpediaDownloader(DatasetDownloader):
+    """Download and prepare DBpedia ontology classification dataset."""
+    
+    def download_and_prepare(self):
+        logger.info("Preparing DBpedia ontology classification dataset...")
+        
+        # DBpedia ontology dataset
+        # source: https://huggingface.co/datasets/fancyzhx/dbpedia_14
+        # 14 classes (Company, EducationalInstitution, Artist, Athlete, OfficeHolder, 
+        #             MeanOfTransportation, Building, NaturalPlace, Village, Animal, 
+        #             Plant, Album, Film, WrittenWork)
+        # 560k train + 70k test samples originally (40k train + 5k test per class)
+        
+        if not HF_AVAILABLE:
+            logger.error("Hugging Face datasets required for DBpedia dataset")
+            return
+            
+        self._download_real_dbpedia()
+    
+    def _download_real_dbpedia(self):
+        """Download real DBpedia dataset using Hugging Face."""
+        logger.info("Downloading DBpedia dataset from Hugging Face...")
+        
+        # Load dataset
+        dataset = load_dataset("fancyzhx/dbpedia_14", cache_dir=self.data_dir / ".cache")
+        
+        # Convert to pandas
+        train_data = dataset['train'].to_pandas()
+        test_data = dataset['test'].to_pandas()
+        
+        # Combine title and content for text field
+        def combine_text(row):
+            title = str(row.get('title', ''))
+            content = str(row.get('content', ''))
+            return f"{title} {content}".strip()
+        
+        train_data['text'] = train_data.apply(combine_text, axis=1)
+        test_data['text'] = test_data.apply(combine_text, axis=1)
+        
+        # Clean up data
+        train_data['text'] = train_data['text'].astype(str).apply(self.clean_text)
+        test_data['text'] = test_data['text'].astype(str).apply(self.clean_text)
+        train_data['label'] = train_data['label'].astype(int) - 1  # Convert to 0-based indexing
+        test_data['label'] = test_data['label'].astype(int) - 1
+        
+        # Select only needed columns
+        train_df = train_data[['text', 'label']].copy()
+        test_df = test_data[['text', 'label']].copy()
+        
+        # Remove empty texts
+        train_df = train_df[train_df['text'].str.strip() != '']
+        test_df = test_df[test_df['text'].str.strip() != '']
+        
+        logger.info(f"DBpedia - Train samples: {len(train_df)}")
+        logger.info(f"DBpedia - Test samples: {len(test_df)}")
+        logger.info(f"DBpedia - Total samples: {len(train_df) + len(test_df)}")
+        logger.info(f"DBpedia - Class distribution:\n{train_df['label'].value_counts().sort_index()}")
+        
+        train_df = self.shuffle_within_split(train_df)
+        test_df = self.shuffle_within_split(test_df)
+        self.save_train_test_directly(train_df, test_df, 'dbpedia')
+    
 
 def main():
     parser = argparse.ArgumentParser(description="Download and prepare text datasets")
     parser.add_argument(
         "--datasets", 
         nargs='+', 
-        default=['ag_news', 'imdb', 'amazon'],
-        choices=['ag_news', 'imdb', 'amazon'],
+        default=['ag_news', 'imdb', 'amazon', 'yelp', 'dbpedia'],
+        choices=['ag_news', 'imdb', 'amazon', 'yelp', 'dbpedia'],
         help="Datasets to download and prepare"
     )
     parser.add_argument(
@@ -425,21 +467,96 @@ def main():
     
     args = parser.parse_args()
     
+    # Track success/failure
+    results = {}
+    
     # Create downloaders
     if 'ag_news' in args.datasets:
-        downloader = AGNewsDownloader(args.data_dir, args.seed)
-        downloader.download_and_prepare()
+        logger.info("\n" + "="*50)
+        logger.info("DOWNLOADING AG NEWS DATASET")
+        logger.info("="*50)
+        try:
+            downloader = AGNewsDownloader(args.data_dir, args.seed)
+            downloader.download_and_prepare()
+            results['ag_news'] = 'SUCCESS'
+        except Exception as e:
+            logger.error(f"Failed to download AG News: {e}")
+            results['ag_news'] = 'FAILED'
     
     if 'imdb' in args.datasets:
-        downloader = IMDBDownloader(args.data_dir, args.seed)
-        downloader.download_and_prepare()
+        logger.info("\n" + "="*50)
+        logger.info("DOWNLOADING IMDB DATASET")
+        logger.info("="*50)
+        try:
+            downloader = IMDBDownloader(args.data_dir, args.seed)
+            downloader.download_and_prepare()
+            results['imdb'] = 'SUCCESS'
+        except Exception as e:
+            logger.error(f"Failed to download IMDB: {e}")
+            results['imdb'] = 'FAILED'
     
     if 'amazon' in args.datasets:
-        downloader = AmazonDownloader(args.data_dir, args.seed)
-        downloader.download_and_prepare()
+        logger.info("\n" + "="*50)
+        logger.info("DOWNLOADING AMAZON DATASET")
+        logger.info("="*50)
+        try:
+            downloader = AmazonDownloader(args.data_dir, args.seed)
+            downloader.download_and_prepare()
+            results['amazon'] = 'SUCCESS'
+        except Exception as e:
+            logger.error(f"Failed to download Amazon: {e}")
+            results['amazon'] = 'FAILED'
+
+    if 'yelp' in args.datasets:
+        logger.info("\n" + "="*50)
+        logger.info("DOWNLOADING YELP DATASET")
+        logger.info("="*50)
+        try:
+            downloader = YelpDownloader(args.data_dir, args.seed)
+            downloader.download_and_prepare()
+            results['yelp'] = 'SUCCESS'
+        except Exception as e:
+            logger.error(f"Failed to download Yelp: {e}")
+            results['yelp'] = 'FAILED'
     
-    logger.info("Dataset preparation complete!")
-    logger.info(f"Data saved to: {args.data_dir}")
+    if 'dbpedia' in args.datasets:
+        logger.info("\n" + "="*50)
+        logger.info("DOWNLOADING DBPEDIA DATASET")
+        logger.info("="*50)
+        try:
+            downloader = DBpediaDownloader(args.data_dir, args.seed)
+            downloader.download_and_prepare()
+            results['dbpedia'] = 'SUCCESS'
+        except Exception as e:
+            logger.error(f"Failed to download DBpedia: {e}")
+            results['dbpedia'] = 'FAILED'
+    
+    # Summary
+    logger.info("\n" + "="*60)
+    logger.info("DATASET DOWNLOAD SUMMARY")
+    logger.info("="*60)
+    
+    successful = [name for name, status in results.items() if status == 'SUCCESS']
+    failed = [name for name, status in results.items() if status == 'FAILED']
+    
+    logger.info(f"✅ Successfully downloaded: {len(successful)}/{len(results)} datasets")
+    for dataset in successful:
+        logger.info(f"   ✓ {dataset}")
+    
+    if failed:
+        logger.info(f"❌ Failed downloads: {len(failed)} datasets")
+        for dataset in failed:
+            logger.info(f"   ✗ {dataset}")
+    
+    logger.info(f"\n📁 All data saved to: {args.data_dir}")
+    logger.info("\n🚀 You can now run your AutoML experiments:")
+    for dataset in successful:
+        logger.info(f"   python run_text.py --dataset {dataset}")
+    
+    if HF_AVAILABLE:
+        logger.info(f"\n💡 Tip: Hugging Face datasets available - real data downloaded when possible")
+    else:
+        logger.info(f"\n⚠️  Install 'datasets' package for real Yelp and DBpedia data: pip install datasets")
 
 
 if __name__ == "__main__":

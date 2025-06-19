@@ -1,6 +1,9 @@
 *.pkl
 *.obj
 
+*egg-info*
+
+*__pycache__*
 output/
 results/
 .data/

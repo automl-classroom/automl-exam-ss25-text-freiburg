@@ -80,41 +80,9 @@ class AGNewsDataset(BaseTextDataset):
             train_df = pd.read_csv(train_path)
             test_df = pd.read_csv(test_path)
         else:
-            # Generate dummy data for demonstration
-            print(f"Data files not found at {train_path}, generating dummy data...")
-            train_df = self._generate_dummy_data(1000, is_train=True)
-            test_df = self._generate_dummy_data(200, is_train=False)
+            raise FileNotFoundError(f"Data files not found at {train_path}, generating dummy data...")
         
         return train_df, test_df
-    
-    def _generate_dummy_data(self, n_samples: int, is_train: bool = True) -> pd.DataFrame:
-        """Generate dummy AG News data for testing."""
-        categories = ["World", "Sports", "Business", "Technology"]
-        templates = {
-            0: ["Global news about {}", "International event in {}", "World update on {}"],
-            1: ["Sports match between {} and {}", "{} wins championship", "Athletic competition in {}"],
-            2: ["Company {} reports earnings", "Business deal with {}", "Market update on {}"],
-            3: ["New technology {}", "Tech company {} launches", "Innovation in {}"]
-        }
-        
-        np.random.seed(42 if is_train else 24)
-        labels = np.random.randint(0, 4, n_samples)
-        texts = []
-        
-        for label in labels:
-            template = np.random.choice(templates[label])
-            if "{}" in template:
-                if template.count("{}") == 1:
-                    text = template.format(f"entity_{np.random.randint(1, 100)}")
-                else:
-                    text = template.format(f"team_{np.random.randint(1, 50)}", 
-                                         f"team_{np.random.randint(51, 100)}")
-            else:
-                text = template
-            texts.append(text + " " + " ".join([f"word_{np.random.randint(1, 1000)}" 
-                                              for _ in range(np.random.randint(10, 50))]))
-        
-        return pd.DataFrame({'text': texts, 'label': labels})
 
 
 class IMDBDataset(BaseTextDataset):
@@ -132,35 +100,9 @@ class IMDBDataset(BaseTextDataset):
             train_df = pd.read_csv(train_path)
             test_df = pd.read_csv(test_path)
         else:
-            print(f"Data files not found at {train_path}, generating dummy data...")
-            train_df = self._generate_dummy_data(2000, is_train=True)
-            test_df = self._generate_dummy_data(400, is_train=False)
+            raise FileNotFoundError(f"Data files not found at {train_path}, generating dummy data...")
         
         return train_df, test_df
-    
-    def _generate_dummy_data(self, n_samples: int, is_train: bool = True) -> pd.DataFrame:
-        """Generate dummy IMDB data for testing."""
-        positive_words = ["excellent", "amazing", "great", "fantastic", "wonderful", "brilliant"]
-        negative_words = ["terrible", "awful", "horrible", "bad", "disappointing", "boring"]
-        
-        np.random.seed(42 if is_train else 24)
-        labels = np.random.randint(0, 2, n_samples)
-        texts = []
-        
-        for label in labels:
-            if label == 1:  # Positive
-                sentiment_words = np.random.choice(positive_words, 3)
-                text = f"This movie was {sentiment_words[0]} and {sentiment_words[1]}. Really {sentiment_words[2]}!"
-            else:  # Negative
-                sentiment_words = np.random.choice(negative_words, 3)
-                text = f"This movie was {sentiment_words[0]} and {sentiment_words[1]}. Really {sentiment_words[2]}!"
-            
-            # Add random filler text
-            text += " " + " ".join([f"word_{np.random.randint(1, 1000)}" 
-                                  for _ in range(np.random.randint(20, 100))])
-            texts.append(text)
-        
-        return pd.DataFrame({'text': texts, 'label': labels})
 
 
 class AmazonReviewsDataset(BaseTextDataset):
@@ -178,37 +120,46 @@ class AmazonReviewsDataset(BaseTextDataset):
             train_df = pd.read_csv(train_path)
             test_df = pd.read_csv(test_path)
         else:
-            print(f"Data files not found at {train_path}, generating dummy data...")
-            train_df = self._generate_dummy_data(3000, is_train=True)
-            test_df = self._generate_dummy_data(600, is_train=False)
+            raise FileNotFoundError(f"Data files not found at {train_path}, generating dummy data...")
         
         return train_df, test_df
+
+
+class YelpDataset(BaseTextDataset):
+    """Yelp Reviews 5-star rating dataset."""
     
-    def _generate_dummy_data(self, n_samples: int, is_train: bool = True) -> pd.DataFrame:
-        """Generate dummy Amazon reviews data for testing."""
-        categories = ["Electronics", "Books", "Clothing", "Home", "Sports"]
-        templates = {
-            0: ["This electronic device is {}", "The gadget works {}", "Electronics quality is {}"],
-            1: ["This book is {}", "Reading experience was {}", "The story is {}"],
-            2: ["This clothing item is {}", "The fabric feels {}", "Fashion choice is {}"],
-            3: ["This home item is {}", "For the house, it's {}", "Home utility is {}"],
-            4: ["This sports equipment is {}", "For exercise, it's {}", "Athletic gear is {}"]
-        }
+    def get_num_classes(self) -> int:
+        return 5
+    
+    def load_data(self) -> Tuple[pd.DataFrame, pd.DataFrame]:
+        """Load Yelp 5-star data."""
+        train_path = self.data_path / "yelp" / "train.csv"
+        test_path = self.data_path / "yelp" / "test.csv"
         
-        quality_words = ["good", "excellent", "poor", "average", "outstanding"]
+        if train_path.exists() and test_path.exists():
+            train_df = pd.read_csv(train_path)
+            test_df = pd.read_csv(test_path)
+        else:
+            raise FileNotFoundError(f"Data files not found at {train_path}, generating dummy data...")
         
-        np.random.seed(42 if is_train else 24)
-        labels = np.random.randint(0, 5, n_samples)
-        texts = []
+        return train_df, test_df
+
+
+class DBpediaDataset(BaseTextDataset):
+    """DBpedia ontology classification dataset (14 classes)."""
+    
+    def get_num_classes(self) -> int:
+        return 14
+    
+    def load_data(self) -> Tuple[pd.DataFrame, pd.DataFrame]:
+        """Load DBpedia ontology data."""
+        train_path = self.data_path / "dbpedia" / "train.csv"
+        test_path = self.data_path / "dbpedia" / "test.csv"
         
-        for label in labels:
-            template = np.random.choice(templates[label])
-            quality = np.random.choice(quality_words)
-            text = template.format(quality)
-            
-            # Add random review text
-            text += " " + " ".join([f"word_{np.random.randint(1, 1000)}" 
-                                  for _ in range(np.random.randint(15, 80))])
-            texts.append(text)
+        if train_path.exists() and test_path.exists():
+            train_df = pd.read_csv(train_path)
+            test_df = pd.read_csv(test_path)
+        else:
+            raise FileNotFoundError(f"Data files not found at {train_path}, generating dummy data...")
         
-        return pd.DataFrame({'text': texts, 'label': labels})
+        return train_df, test_df
