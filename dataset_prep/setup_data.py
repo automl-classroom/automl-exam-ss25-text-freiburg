@@ -20,12 +20,6 @@ def main():
     parser.add_argument("--seed", type=int, default=42)
     args = parser.parse_args()
     
-    # Expand 'all' to all datasets
-    if 'all' in args.dataset:
-        datasets = ['ag_news', 'imdb', 'amazon', 'yelp', 'dbpedia']
-    else:
-        datasets = args.dataset
-    
     downloaders = {
         'ag_news': AGNewsDownloader,
         'imdb': IMDBDownloader,
