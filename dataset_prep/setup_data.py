@@ -28,9 +28,9 @@ def main():
         'dbpedia': DBpediaDownloader
     }
     
-    print(f"Downloading datasets: {', '.join(datasets)}")
+    print(f"Downloading datasets: {', '.join(args.datasets)}")
     
-    for dataset in datasets:
+    for dataset in args.datasets:
         print(f"Downloading {dataset}...")
         downloaders[dataset](args.data_dir, args.seed).download_and_prepare()
     
