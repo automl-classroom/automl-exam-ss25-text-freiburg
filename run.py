@@ -14,7 +14,8 @@ import numpy as np
 import argparse
 import logging
 
-from src import TextAutoML, AGNewsDataset, IMDBDataset, AmazonReviewsDataset
+from src.automl import TextAutoML, run_pipeline
+from src.datasets import AGNewsDataset, IMDBDataset, AmazonReviewsDataset
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +24,18 @@ def main(
         dataset: str,
         output_path: Path,
         seed: int,
-):
+        approach: str,
+        vocab_size: int = 10000,
+        token_length: int = 128,
+        epochs: int = 5,
+        batch_size: int = 32,
+        lr: float = 0.0001,
+        weight_decay: float = 0.01,
+        ffnn_hidden: int = 128,
+        lstm_emb_dim: int = 128,
+        lstm_hidden_dim: int = 128,
+        hpo: bool = False
+    ):
     match dataset:
         case "ag_news":
             dataset_class = AGNewsDataset
@@ -40,13 +52,59 @@ def main(
     # an example of how your automl system could be used.
     # As a general rule of thumb, you should **never** pass in any
     # test data to your AutoML solution other than to generate predictions.
-    automl = TextAutoML(seed=seed)
+
+    # Get the dataset and create dataloaders
+    data_info = dataset_class().create_dataloaders()
+    train_df = data_info['train_df']
+    val_df = data_info.get('val_df', None)
+    test_df = data_info['test_df']
+    num_classes = data_info['num_classes']
+    logger.info(f"Train size: {len(train_df)}, Validation size: {len(val_df)}, Test size: {len(test_df)}")
+    logger.info(f"Number of classes: {num_classes}")
+
+    if hpo:
+        #NEPS PART
+        logger.info("Running hyperparameter optimization with NePS")
+        best_params = run_pipeline(
+            train_df=train_df,
+            val_df=val_df,
+            num_classes=num_classes, 
+        )
+        logger.info(f"Best parameters from NePS: {best_params}")
+
+        approach = best_params.get('approach', approach)
+        seed = best_params.get('seed', seed)
+        vocab_size = best_params.get('vocab_size', vocab_size)
+        token_length = best_params.get('token_length', token_length)
+        epochs = best_params.get('epochs', epochs)
+        batch_size = best_params.get('batch_size', batch_size)
+        lr = best_params.get('lr', lr)
+        weight_decay = best_params.get('weight_decay', weight_decay)
+        ffnn_hidden = best_params.get('ffnn_hidden', ffnn_hidden)
+        lstm_emb_dim = best_params.get('lstm_emb_dim', lstm_emb_dim)
+        lstm_hidden_dim = best_params.get('lstm_hidden_dim', lstm_hidden_dim)
+
+    # Initialize the TextAutoML instance with the best parameters
+    automl = TextAutoML(
+        seed=seed, 
+        approach=approach, 
+        vocab_size=vocab_size, 
+        token_length=token_length,
+        epochs=epochs, 
+        batch_size=batch_size,
+        lr=lr, 
+        weight_decay=weight_decay,
+        ffnn_hidden=ffnn_hidden, 
+        lstm_emb_dim=lstm_emb_dim,
+        lstm_hidden_dim=lstm_hidden_dim
+    )
+
+    # Fit the AutoML model on the training and validation datasets
+    automl.fit(train_df, val_df, num_classes=num_classes)
+    logger.info("Training complete")
     
-    # Load the dataset and create a loader then pass it
-    automl.fit(dataset_class)
-    
-    # Do the same for the test dataset
-    test_preds, test_labels = automl.predict(dataset_class)
+    # Predict on the test set
+    test_preds, test_labels = automl.predict(test_df)
 
     # Write the predictions of X_test to disk
     logger.info("Writing predictions to disk")
@@ -103,11 +161,86 @@ if __name__ == "__main__":
         )
     )
     parser.add_argument(
+        "--approach",
+        type=str,
+        default="transformer",
+        choices=["tfidf", "lstm", "transformer"],
+        help=(
+            "The approach to use for the AutoML system. "
+            "Options are 'tfidf', 'lstm', or 'transformer'."
+        )
+    )
+    parser.add_argument(
+        "--vocab-size",
+        type=int,
+        default=10000,
+        help="The size of the vocabulary to use for the text dataset."
+    )
+    parser.add_argument(
+        "--token-length",
+        type=int,
+        default=128,
+        help="The maximum length of tokens to use for the text dataset."
+    )
+    parser.add_argument(
+        "--epochs",
+        type=int,
+        default=5,
+        help="The number of epochs to train the model for."
+    )
+    parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=32,
+        help="The batch size to use for training and evaluation."
+    )
+    parser.add_argument(
+        "--lr",
+        type=float,
+        default=0.0001,
+        help="The learning rate to use for the optimizer."
+    )
+    parser.add_argument(
+        "--weight-decay",
+        type=float,
+        default=0.01,
+        help="The weight decay to use for the optimizer."
+    )
+
+    parser.add_argument(
+        "--lstm-emb-dim",
+        type=int,
+        default=128,
+        help="The embedding dimension to use for the LSTM model."
+    )
+
+    parser.add_argument(
+        "--lstm-hidden-dim",
+        type=int,
+        default=128,
+        help="The hidden size to use for the LSTM model."
+    )
+
+    parser.add_argument(
+        "--ffnn-hidden-layer-dim",
+        type=int,
+        default=128,
+        help="The hidden size to use for the model."
+    )
+    parser.add_argument(
+        "--hpo",
+        action="store_true",
+        default=False,
+        help=(
+            "Whether to run hyperparameter optimization (HPO) using NePS."
+            " If set, the script will use NePS to find the best parameters."
+        )
+    )
+    parser.add_argument(
         "--quiet",
         action="store_true",
         help="Whether to log only warnings and errors."
     )
-
     args = parser.parse_args()
 
     if not args.quiet:
@@ -124,4 +257,15 @@ if __name__ == "__main__":
         dataset=args.dataset,
         output_path=args.output_path,
         seed=args.seed,
+        approach=args.approach,
+        vocab_size=args.vocab_size,
+        token_length=args.token_length,
+        epochs=args.epochs,
+        batch_size=args.batch_size,
+        lr=args.lr,
+        weight_decay=args.weight_decay,
+        ffnn_hidden=args.ffnn_hidden_layer_dim,
+        lstm_emb_dim=args.lstm_emb_dim,
+        lstm_hidden_dim=args.lstm_hidden_dim,
+        hpo=args.hpo
     )

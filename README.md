@@ -57,19 +57,19 @@ The system supports three datasets:
 
 ```bash
 # Run AG News classification
-python run_text.py --dataset ag_news
+python run.py --dataset ag_news
 
 # Run IMDB sentiment analysis
-python run_text.py --dataset imdb
+python run.py --dataset imdb
 
 # Run Amazon reviews classification
-python run_text.py --dataset amazon
+python run.py --dataset amazon
 
 # Specify output path and seed
-python run_text.py --dataset ag_news --output-path my_predictions.npy --seed 123
+python run.py --dataset ag_news --output-path my_predictions.npy --seed 123
 
 # Run in quiet mode (less logging)
-python run_text.py --dataset imdb --quiet
+python run.py --dataset imdb --quiet
 ```
 
 ## Data Format
