@@ -15,7 +15,13 @@ import argparse
 import logging
 
 from src.automl import TextAutoML, run_pipeline
-from src.datasets import AGNewsDataset, IMDBDataset, AmazonReviewsDataset
+from src.datasets import (
+    AGNewsDataset,
+    AmazonReviewsDataset,
+    DBpediaDataset,
+    IMDBDataset,
+    YelpDataset
+)
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +49,10 @@ def main(
             dataset_class = IMDBDataset
         case "amazon":
             dataset_class = AmazonReviewsDataset
+        case "dbpedia":
+            dataset_class = DBpediaDataset
+        case "yelp":
+            dataset_class = YelpDataset
         case _:
             raise ValueError(f"Invalid dataset: {dataset}")
 
@@ -140,7 +150,7 @@ if __name__ == "__main__":
         type=str,
         required=True,
         help="The name of the dataset to run on.",
-        choices=["ag_news", "imdb", "amazon"]
+        choices=["ag_news", "imdb", "amazon", "dbpedia", "yelp"]
     )
     parser.add_argument(
         "--output-path",

@@ -1,7 +1,7 @@
 *.pkl
 *.obj
 
-dataset_prep/
+# dataset_prep/
 
 *__pycache__/
 *egg-info*
