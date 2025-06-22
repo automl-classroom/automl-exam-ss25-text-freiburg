@@ -69,7 +69,7 @@ def main_loop(
     # test data to your AutoML solution other than to generate predictions.
 
     # Get the dataset and create dataloaders
-    # data_path = Path(data_path) if isinstance(data_path, str) else data_path
+    data_path = Path(data_path) if isinstance(data_path, str) else data_path
     data_info = dataset_class(data_path).create_dataloaders(val_size=val_size, random_state=seed)
     train_df = data_info['train_df']
     val_df = data_info.get('val_df', None)
