@@ -2,6 +2,7 @@
 *.obj
 
 # dataset_prep/
+hpo/
 
 *__pycache__/
 *egg-info*

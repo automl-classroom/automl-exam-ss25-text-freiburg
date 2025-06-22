@@ -105,7 +105,7 @@ def main_loop(
 
     # Write the predictions of X_test to disk
     logger.info("Writing predictions to disk")
-    with output_path.open("wb") as f:
+    with (output_path / "test_preds.npy").open("wb") as f:
         np.save(f, test_preds)
 
     # In case of running on the final exam data, also add the predictions.npy

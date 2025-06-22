@@ -1,7 +1,9 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "automl"
-license = { file = "LICENSE" }
-# Feel free to change from here
 version = "0.1.0"
 dependencies = [
   "torchvision",
@@ -10,15 +12,16 @@ dependencies = [
   "numpy<2.0",
   "IPython",
   "pyyaml",
-  "datasets>=2.0",     # Force newer datasets version
-  "transformers>=4.20", # Force newer transformers
+  "datasets>=2.0",
+  "transformers>=4.20",
   "neural-pipeline-search",
-  "pyarrow>=12.0"      # Force newer pyarrow
+  "pyarrow>=12.0"
 ]
 requires-python = ">=3.12"
 authors = [{ name = "user", email = "user@user.com" }]
 readme = "README.md"
 description = "AutoML SS25 Exam - Text"
+license = { text = "BSD-3-Clause" }
 classifiers = [
   'Intended Audience :: Science/Research',
   'Intended Audience :: Developers',
@@ -31,3 +34,7 @@ classifiers = [
   'Operating System :: MacOS',
   'Programming Language :: Python :: 3',
 ]
+
+[tool.setuptools.packages.find]
+where = ["src"]  # Tell setuptools to look in src/
+include = ["automl*"]
