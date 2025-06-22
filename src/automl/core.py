@@ -5,12 +5,11 @@ from torch.utils.data import Dataset, DataLoader
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics import accuracy_score
 from sklearn.model_selection import train_test_split
-from src.models import SimpleFFNN, LSTMClassifier
-from src.utils import SimpleTextDataset
+from automl.models import SimpleFFNN, LSTMClassifier
+from automl.utils import SimpleTextDataset
 import logging
 from typing import Tuple
 from collections import Counter
-from neps import NePS
 
 try:
     from transformers import AutoTokenizer, AutoModelForSequenceClassification
@@ -22,9 +21,21 @@ logger = logging.getLogger(__name__)
 
 
 class TextAutoML:
-    def __init__(self, seed=42, approach='auto', vocab_size=10000, token_length=128, epochs=5,
-                 batch_size=64, lr=1e-4, weight_decay=0.0,
-                 ffnn_hidden=128, lstm_emb_dim=128, lstm_hidden_dim=128):
+    def __init__(
+        self,
+        seed=42,
+        approach='auto',
+        vocab_size=10000,
+        token_length=128,
+        epochs=5,
+        batch_size=64,
+        lr=1e-4,
+        weight_decay=0.0,
+        ffnn_hidden=128,
+        lstm_emb_dim=128,
+        lstm_hidden_dim=128,
+        fraction_layers_to_finetune: float=1.0,
+    ):
         self.seed = seed
         np.random.seed(seed)
         torch.manual_seed(seed)
@@ -41,6 +52,7 @@ class TextAutoML:
         self.ffnn_hidden = ffnn_hidden
         self.lstm_emb_dim = lstm_emb_dim
         self.lstm_hidden_dim = lstm_hidden_dim
+        self.fraction_layers_to_finetune = fraction_layers_to_finetune
 
         self.model = None
         self.tokenizer = None
@@ -49,9 +61,23 @@ class TextAutoML:
         self.val_texts = []
         self.val_labels = []
 
-    def fit(self, train_df, val_df, num_classes, seed=42, approach=None, vocab_size=None, token_length=None,
-            epochs=None, batch_size=None, lr=None, weight_decay=None,
-            ffnn_hidden=None, lstm_emb_dim=None, lstm_hidden_dim=None):
+    def fit(
+        self,
+        train_df,
+        val_df,
+        num_classes,
+        approach=None,
+        vocab_size=None,
+        token_length=None,
+        epochs=None,
+        batch_size=None,
+        lr=None,
+        weight_decay=None,
+        ffnn_hidden=None,
+        lstm_emb_dim=None,
+        lstm_hidden_dim=None,
+        fraction_layers_to_finetune=None
+    ):
         """
         Fits a model to the given dataset.
 
@@ -81,7 +107,8 @@ class TextAutoML:
         if ffnn_hidden is not None: self.ffnn_hidden = ffnn_hidden
         if lstm_emb_dim is not None: self.lstm_emb_dim = lstm_emb_dim
         if lstm_hidden_dim is not None: self.lstm_hidden_dim = lstm_hidden_dim
-
+        if fraction_layers_to_finetune is not None: self.fraction_layers_to_finetune = fraction_layers_to_finetune
+        
         logger.info("Loading and preparing data...")
 
         train_texts = train_df['text'].tolist()
@@ -103,32 +130,59 @@ class TextAutoML:
             else:
                 self.approach = 'lstm'
 
+        dataset = None
         if self.approach == 'tfidf':
-            self.vectorizer = TfidfVectorizer(max_features=self.vocab_size)
+            # TODO: check role of vocab size here/max features
+            self.vectorizer = TfidfVectorizer(
+                max_features=self.vocab_size,
+                lowercase=True,
+                min_df=2,    # ignore words appearing in less than 2 sentences
+                max_df=0.8,  # ignore words appearing in > 80% of sentences
+                sublinear_tf=True,  # use log-spaced term-frequency scoring
+            )
             X = self.vectorizer.fit_transform(train_texts).toarray()
             dataset = torch.utils.data.TensorDataset(torch.tensor(X, dtype=torch.float32), torch.tensor(train_labels))
             self.model = SimpleFFNN(X.shape[1], hidden=self.ffnn_hidden, output_dim=self.num_classes)
 
-        elif self.approach == 'lstm':
-            vocab = set(w for t in train_texts for w in t.split())
-            vocab = ['<PAD>', '<UNK>'] + list(vocab)[:self.vocab_size - 2]
-            self.tokenizer = {w: i for i, w in enumerate(vocab)}
-            dataset = SimpleTextDataset(train_texts, train_labels, self.tokenizer, self.token_length)
-            self.model = LSTMClassifier(len(self.tokenizer), self.lstm_emb_dim, self.lstm_hidden_dim, self.num_classes)
-
-        elif self.approach == 'transformer' and TRANSFORMERS_AVAILABLE:
+        elif self.approach in ['lstm', 'transformer']:
             model_name = 'distilbert-base-uncased'
             self.tokenizer = AutoTokenizer.from_pretrained(model_name)
+            self.vocab_size = self.tokenizer.vocab_size
             dataset = SimpleTextDataset(train_texts, train_labels, self.tokenizer, self.token_length)
-            self.model = AutoModelForSequenceClassification.from_pretrained(model_name, num_labels=self.num_classes)
+            # TODO: check role of token length here
 
-        else:
-            raise ValueError("Unsupported approach or missing transformers.")
+            match self.approach:
+                case "lstm":
+                    self.model = LSTMClassifier(len(self.tokenizer), self.lstm_emb_dim, self.lstm_hidden_dim, self.num_classes)
+                case "transformer":
+                    if TRANSFORMERS_AVAILABLE:
+                        self.model = AutoModelForSequenceClassification.from_pretrained(model_name, num_labels=self.num_classes)
+                        freeze_layers(self.model, self.fraction_layers_to_finetune)  
+                    else:
+                        raise ValueError(
+                            "Need `AutoTokenizer`, `AutoModelForSequenceClassification` "
+                            "from `transformers` package."
+                        )
+                case _:
+                    raise ValueError("Unsupported approach or missing transformers.")
+        # elif self.approach == 'transformer' and TRANSFORMERS_AVAILABLE:
+        #     # model_name = 'distilbert-base-uncased'
+        #     # self.tokenizer = AutoTokenizer.from_pretrained(model_name)
+        #     # TODO: check role of token length here
+        #     dataset = SimpleTextDataset(train_texts, train_labels, self.tokenizer, self.token_length)
+        #     self.model = AutoModelForSequenceClassification.from_pretrained(model_name, num_labels=self.num_classes)
+        #     freeze_layers(self.model, fraction_layers_to_finetune)  
 
+        # else:
+        #     raise ValueError("Unsupported approach or missing transformers.")
+
+        # Training and validating
         self.model.to(self.device)
+        assert dataset is not None, f"`dataset` cannot be None here!"
         loader = DataLoader(dataset, batch_size=self.batch_size, shuffle=True)
         val_acc = self._train_loop(loader)
-        return val_acc
+
+        return 1 - val_acc
 
     def _train_loop(self, loader):
         optimizer = torch.optim.AdamW(self.model.parameters(), lr=self.lr, weight_decay=self.weight_decay)
@@ -139,6 +193,7 @@ class TextAutoML:
             for batch in loader:
                 self.model.train()
                 optimizer.zero_grad()
+                print(isinstance(batch, dict), type(batch))
                 if isinstance(batch, dict):
                     inputs = {k: v.to(self.device) for k, v in batch.items()}
                     outputs = self.model(**inputs)
@@ -201,65 +256,12 @@ class TextAutoML:
         return preds, np.array(test_labels)
 
 
-def run_pipeline(train_df=None, val_df=None, num_classes=None):
-    """
-    Run the AutoML pipeline with the provided parameters.
-    """
-    
-    # Load train and validation dat
+def freeze_layers(model, fraction_layers_to_finetune: float=1.0) -> None:
+    total_layers = len(model.distilbert.transformer.layer)
+    _num_layers_to_finetune = int(fraction_layers_to_finetune * total_layers)
+    layers_to_freeze = total_layers - _num_layers_to_finetune
 
-    if train_df is None or val_df is None or num_classes is None:
-        raise ValueError("train_df, val_df, and num_classes must be provided.")
-
-    def _objective_function(**kwargs):
-        automl = TextAutoML(
-            num_classes=num_classes,
-            seed=kwargs.get('seed', 42),
-            approach=kwargs.get('approach', 'auto'),
-            vocab_size=kwargs.get('vocab_size', 10000),
-            token_length=kwargs.get('token_length', 128),
-            epochs=kwargs.get('epochs', 5),
-            batch_size=kwargs.get('batch_size', 64),
-            lr=kwargs.get('lr', 1e-4),
-            weight_decay=kwargs.get('weight_decay', 0.0),
-            ffnn_hidden=kwargs.get('ffnn_hidden', 128),
-            lstm_emb_dim=kwargs.get('lstm_emb_dim', 128),
-            lstm_hidden_dim=kwargs.get('lstm_hidden_dim', 128)
-        )
-        val_acc = automl.fit(
-            train_df=train_df,
-            val_df=val_df,
-            num_classes=num_classes,
-        )
-        return 1 - val_acc
-
-    pipeline_space = {
-        'approach': neps.Categorical(choices=['tfidf', 'lstm', 'transformer']),
-        'vocab_size': neps.Integer(lower=5000, upper=20000, log=False),
-        'token_length': neps.Integer(lower=64, upper=256, log=False),
-        'epochs': neps.Integer(lower=3, upper=10, log=False),
-        'batch_size': neps.Integer(lower=16, upper=64, log=False),
-        'lr': neps.Float(lower=1e-4, upper=1e-3, log=False),
-        'weight_decay': neps.Float(lower=0.0, upper=1e-5, log=False),
-        'ffnn_hidden': neps.Integer(lower=64, upper=256, log=False),
-        'lstm_emb_dim': neps.Integer(lower=50, upper=200, log=False),
-        'lstm_hidden_dim': neps.Integer(lower=50, upper=200, log=False)
-    }
-
-    neps.run(
-        evaluate_pipeline=_objective_function,
-        pipeline_space=pipeline_space,
-        root_directory="./neps/results_text_automl",
-        max_evaluations_total=20,
-        overwrite_working_directory=True,
-        post_run_summary=True,
-    )
-    
-    # return the best parameters found
-    try: 
-        best_params = neps.get_best_parameters()
-        if best_params:
-            return best_params
-        else:
-            logger.error("No best parameters found.")
-        return None     
+    for layer in model.distilbert.transformer.layer[:layers_to_freeze]:
+        for param in layer.parameters():
+            param.requires_grad = False
+# end of file

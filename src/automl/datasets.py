@@ -12,7 +12,7 @@ class BaseTextDataset(ABC):
     """Base class for text datasets."""
     
     def __init__(self, data_path: Optional[Path] = None):
-        self.data_path = data_path or Path("data")
+        self.data_path = Path(data_path) if isinstance(data_path, str) else data_path
         self.vocab_size = 10000  # Default vocab size
         self.max_length = 512    # Default max sequence length
         
@@ -36,15 +36,18 @@ class BaseTextDataset(ABC):
         text = ' '.join(text.split())
         return text
     
-    def create_dataloaders(self, batch_size: int = 32, test_size: float = 0.2, 
-                          random_state: int = 42) -> Dict[str, Any]:
+    def create_dataloaders(
+        self,
+        val_size: float = 0.2,
+        random_state: int = 42
+    ) -> Dict[str, Any]:
         """Create train/validation/test dataloaders and preprocessing objects."""
-        train_df, test_df = self.load_data()
+        train_df, test_df = self.load_data()  # not implemented in base class `BaseTextDataset`
         
         # Split training data into train/validation
-        if test_size > 0:
+        if val_size > 0:
             train_df, val_df = train_test_split(
-                train_df, test_size=test_size, random_state=random_state, 
+                train_df, test_size=val_size, random_state=random_state,
                 stratify=train_df['label'] if 'label' in train_df.columns else None
             )
         else:

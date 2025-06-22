@@ -8,6 +8,7 @@ try:
 except ImportError:
     TRANSFORMERS_AVAILABLE = False
 
+
 class SimpleTextDataset(Dataset):
     def __init__(self, texts, labels, tokenizer=None, max_length=128):
         self.texts = texts

@@ -8,14 +8,15 @@ to a file, which we will grade using github classrooms!
 """
 from __future__ import annotations
 
-from pathlib import Path
-from sklearn.metrics import accuracy_score, classification_report
-import numpy as np
 import argparse
 import logging
+import numpy as np
+import os
+from pathlib import Path
+from sklearn.metrics import accuracy_score, classification_report
 
-from src.automl import TextAutoML, run_pipeline
-from src.datasets import (
+from automl.core import TextAutoML
+from automl.datasets import (
     AGNewsDataset,
     AmazonReviewsDataset,
     DBpediaDataset,
@@ -25,12 +26,16 @@ from src.datasets import (
 
 logger = logging.getLogger(__name__)
 
+FINAL_TEST_DATASET="yelp"
 
-def main(
+
+def main_loop(
         dataset: str,
         output_path: Path,
+        data_path: Path,
         seed: int,
         approach: str,
+        val_size: float = 0.2,
         vocab_size: int = 10000,
         token_length: int = 128,
         epochs: int = 5,
@@ -40,7 +45,7 @@ def main(
         ffnn_hidden: int = 128,
         lstm_emb_dim: int = 128,
         lstm_hidden_dim: int = 128,
-        hpo: bool = False
+        fraction_layers_to_finetune: float = 1.0,
     ):
     match dataset:
         case "ag_news":
@@ -64,55 +69,37 @@ def main(
     # test data to your AutoML solution other than to generate predictions.
 
     # Get the dataset and create dataloaders
-    data_info = dataset_class().create_dataloaders()
+    # data_path = Path(data_path) if isinstance(data_path, str) else data_path
+    data_info = dataset_class(data_path).create_dataloaders(val_size=val_size, random_state=seed)
     train_df = data_info['train_df']
     val_df = data_info.get('val_df', None)
     test_df = data_info['test_df']
     num_classes = data_info['num_classes']
-    logger.info(f"Train size: {len(train_df)}, Validation size: {len(val_df)}, Test size: {len(test_df)}")
+    logger.info(
+        f"Train size: {len(train_df)}, Validation size: {len(val_df)}, Test size: {len(test_df)}"
+    )
     logger.info(f"Number of classes: {num_classes}")
-
-    if hpo:
-        #NEPS PART
-        logger.info("Running hyperparameter optimization with NePS")
-        best_params = run_pipeline(
-            train_df=train_df,
-            val_df=val_df,
-            num_classes=num_classes, 
-        )
-        logger.info(f"Best parameters from NePS: {best_params}")
-
-        approach = best_params.get('approach', approach)
-        seed = best_params.get('seed', seed)
-        vocab_size = best_params.get('vocab_size', vocab_size)
-        token_length = best_params.get('token_length', token_length)
-        epochs = best_params.get('epochs', epochs)
-        batch_size = best_params.get('batch_size', batch_size)
-        lr = best_params.get('lr', lr)
-        weight_decay = best_params.get('weight_decay', weight_decay)
-        ffnn_hidden = best_params.get('ffnn_hidden', ffnn_hidden)
-        lstm_emb_dim = best_params.get('lstm_emb_dim', lstm_emb_dim)
-        lstm_hidden_dim = best_params.get('lstm_hidden_dim', lstm_hidden_dim)
 
     # Initialize the TextAutoML instance with the best parameters
     automl = TextAutoML(
-        seed=seed, 
-        approach=approach, 
-        vocab_size=vocab_size, 
+        seed=seed,
+        approach=approach,
+        vocab_size=vocab_size,
         token_length=token_length,
-        epochs=epochs, 
+        epochs=epochs,
         batch_size=batch_size,
-        lr=lr, 
+        lr=lr,
         weight_decay=weight_decay,
-        ffnn_hidden=ffnn_hidden, 
+        ffnn_hidden=ffnn_hidden,
         lstm_emb_dim=lstm_emb_dim,
-        lstm_hidden_dim=lstm_hidden_dim
+        lstm_hidden_dim=lstm_hidden_dim,
+        fraction_layers_to_finetune=fraction_layers_to_finetune,
     )
 
     # Fit the AutoML model on the training and validation datasets
-    automl.fit(train_df, val_df, num_classes=num_classes)
+    val_err = automl.fit(train_df, val_df, num_classes=num_classes)
     logger.info("Training complete")
-    
+
     # Predict on the test set
     test_preds, test_labels = automl.predict(test_df)
 
@@ -123,7 +110,7 @@ def main(
 
     # In case of running on the final exam data, also add the predictions.npy
     # to the correct location for auto evaluation.
-    if dataset == "amazon":  # Assuming amazon is the exam dataset
+    if dataset == FINAL_TEST_DATASET:  # Assuming amazon is the exam dataset
         test_output_path = Path("data/exam_text_dataset/predictions.npy")
         test_output_path.parent.mkdir(parents=True, exist_ok=True)
         with test_output_path.open("wb") as f:
@@ -155,10 +142,19 @@ if __name__ == "__main__":
     parser.add_argument(
         "--output-path",
         type=Path,
-        default=Path("text_predictions.npy"),
+        default=None,
         help=(
             "The path to save the predictions to."
-            " By default this will just save to './text_predictions.npy'."
+            " By default this will just save to the cwd as `./results`."
+        )
+    )
+    parser.add_argument(
+        "--data-path",
+        type=Path,
+        default=None,
+        help=(
+            "The path to laod the data from."
+            " By default this will look up cwd for `./.data/`."
         )
     )
     parser.add_argument(
@@ -263,9 +259,15 @@ if __name__ == "__main__":
         f"\n{args}"
     )
 
-    main(
+    if args.output_path is None:
+        args.output_path =  Path.cwd().absolute() / "results"
+    if args.data_path is None:
+        args.data_path = Path.cwd().absolute() / ".data"
+
+    main_loop(
         dataset=args.dataset,
-        output_path=args.output_path,
+        output_path=Path(args.output_path).absolute(),
+        data_path=Path(args.data_path).absolute(),
         seed=args.seed,
         approach=args.approach,
         vocab_size=args.vocab_size,
@@ -277,5 +279,6 @@ if __name__ == "__main__":
         ffnn_hidden=args.ffnn_hidden_layer_dim,
         lstm_emb_dim=args.lstm_emb_dim,
         lstm_hidden_dim=args.lstm_hidden_dim,
-        hpo=args.hpo
+        # hpo=args.hpo 
     )
+# end of file
