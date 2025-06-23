@@ -116,8 +116,10 @@ class AmazonReviewsDataset(BaseTextDataset):
     
     def load_data(self) -> Tuple[pd.DataFrame, pd.DataFrame]:
         """Load Amazon reviews data."""
-        train_path = self.data_path / "amazon" / "train.csv"
-        test_path = self.data_path / "amazon" / "test.csv"
+        # train_path = self.data_path / "amazon" / "train.csv"
+        train_path = Path("/work/dlclarge2/mallik-ss25-automl/text/misc/neeratyoy/automl-exam-ss25-text-freiburg/.data") / "amazon" / "train.csv"
+        # test_path = self.data_path / "amazon" / "test.csv"
+        test_path = Path("/work/dlclarge2/mallik-ss25-automl/text/misc/neeratyoy/automl-exam-ss25-text-freiburg/.data") / "amazon" / "test.csv"
         
         if train_path.exists() and test_path.exists():
             train_df = pd.read_csv(train_path)

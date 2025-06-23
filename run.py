@@ -15,6 +15,16 @@ import os
 from pathlib import Path
 from sklearn.metrics import accuracy_score, classification_report
 
+# Force the correct path to be first
+# import sys
+# project_root = "/work/dlclarge2/mallik-ss25-automl/text/misc/neeratyoy/automl-exam-ss25-text-freiburg/src"
+# if project_root not in sys.path:
+#     sys.path.insert(0, project_root)
+
+# Verify it's using the right path
+# import automl
+# print(f"DEBUG: Using automl from {automl.__file__}")
+
 from automl.core import TextAutoML
 from automl.datasets import (
     AGNewsDataset,
@@ -30,23 +40,23 @@ FINAL_TEST_DATASET="yelp"
 
 
 def main_loop(
-        dataset: str,
-        output_path: Path,
-        data_path: Path,
-        seed: int,
-        approach: str,
-        val_size: float = 0.2,
-        vocab_size: int = 10000,
-        token_length: int = 128,
-        epochs: int = 5,
-        batch_size: int = 32,
-        lr: float = 0.0001,
-        weight_decay: float = 0.01,
-        ffnn_hidden: int = 128,
-        lstm_emb_dim: int = 128,
-        lstm_hidden_dim: int = 128,
-        fraction_layers_to_finetune: float = 1.0,
-    ):
+    dataset: str,
+    output_path: Path,
+    data_path: Path,
+    seed: int,
+    approach: str,
+    val_size: float = 0.2,
+    vocab_size: int = 10000,
+    token_length: int = 128,
+    epochs: int = 5,
+    batch_size: int = 32,
+    lr: float = 0.0001,
+    weight_decay: float = 0.01,
+    ffnn_hidden: int = 128,
+    lstm_emb_dim: int = 128,
+    lstm_hidden_dim: int = 128,
+    fraction_layers_to_finetune: float = 1.0,
+):
     match dataset:
         case "ag_news":
             dataset_class = AGNewsDataset
