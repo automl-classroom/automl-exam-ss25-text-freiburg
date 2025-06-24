@@ -22,7 +22,9 @@ class LSTMClassifier(nn.Module):
         self.lstm = nn.LSTM(embedding_dim, hidden_dim, batch_first=True)
         self.fc = nn.Linear(hidden_dim, output_dim)
 
-    def forward(self, x):
+    def forward(self, **kwargs):
+        x = kwargs["input_ids"]
         x = self.embed(x)
         _, (h, _) = self.lstm(x)
-        return self.fc(h[-1])
+        logits = self.fc(h[-1])
+        return logits

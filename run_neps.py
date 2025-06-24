@@ -8,6 +8,14 @@ import neps
 from run import main_loop
 
 
+MODEL_TO_EPOCH_MAP = dict(
+	tfidf=15,
+	lstm=25,
+	transformer=9
+)
+ABSOLUTE_MIN_EPOCH = 1
+
+
 def evaluate_pipeline(
 	pipeline_directory,
 	previous_pipeline_directory,
@@ -25,6 +33,15 @@ def evaluate_pipeline(
 	kwargs.update({"output_path": pipeline_directory})
 	# crucial handling of data path
 	kwargs.update({"data_path": Path(kwargs["data_path"])})
+
+	# handling epoch scaling: fraction -> integer
+	_epoch = max(
+		ABSOLUTE_MIN_EPOCH, 
+		int(kwargs["epochs"] * MODEL_TO_EPOCH_MAP[kwargs["approach"]])
+	)
+	kwargs.update({"epochs": _epoch})
+	# crucial handling of resuming
+	kwargs.update({"load_path": previous_pipeline_directory})
 
 	# main call to training loop
 	return main_loop(**kwargs)

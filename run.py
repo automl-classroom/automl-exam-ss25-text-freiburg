@@ -11,9 +11,9 @@ from __future__ import annotations
 import argparse
 import logging
 import numpy as np
-import os
 from pathlib import Path
 from sklearn.metrics import accuracy_score, classification_report
+import yaml
 
 # Force the correct path to be first
 # import sys
@@ -40,23 +40,24 @@ FINAL_TEST_DATASET="yelp"
 
 
 def main_loop(
-    dataset: str,
-    output_path: Path,
-    data_path: Path,
-    seed: int,
-    approach: str,
-    val_size: float = 0.2,
-    vocab_size: int = 10000,
-    token_length: int = 128,
-    epochs: int = 5,
-    batch_size: int = 32,
-    lr: float = 0.0001,
-    weight_decay: float = 0.01,
-    ffnn_hidden: int = 128,
-    lstm_emb_dim: int = 128,
-    lstm_hidden_dim: int = 128,
-    fraction_layers_to_finetune: float = 1.0,
-):
+        dataset: str,
+        output_path: Path,
+        data_path: Path,
+        seed: int,
+        approach: str,
+        val_size: float = 0.2,
+        vocab_size: int = 10000,
+        token_length: int = 128,
+        epochs: int = 5,
+        batch_size: int = 32,
+        lr: float = 0.0001,
+        weight_decay: float = 0.01,
+        ffnn_hidden: int = 128,
+        lstm_emb_dim: int = 128,
+        lstm_hidden_dim: int = 128,
+        fraction_layers_to_finetune: float = 1.0,
+        load_path: Path = None,
+    ):
     match dataset:
         case "ag_news":
             dataset_class = AGNewsDataset
@@ -107,7 +108,13 @@ def main_loop(
     )
 
     # Fit the AutoML model on the training and validation datasets
-    val_err = automl.fit(train_df, val_df, num_classes=num_classes)
+    val_err = automl.fit(
+        train_df,
+        val_df,
+        num_classes=num_classes,
+        load_path=load_path,
+        save_path=output_path,
+    )
     logger.info("Training complete")
 
     # Predict on the test set
@@ -115,13 +122,17 @@ def main_loop(
 
     # Write the predictions of X_test to disk
     logger.info("Writing predictions to disk")
+    with (output_path / "score.yaml").open("w") as f:
+        yaml.safe_dump({"val_err": float(val_err)}, f)
+    logger.info(f"Saved validataion score at {output_path / 'score.yaml'}")
     with (output_path / "test_preds.npy").open("wb") as f:
         np.save(f, test_preds)
+    logger.info(f"Saved tet prediction at {output_path / 'test_preds.npy'}")
 
     # In case of running on the final exam data, also add the predictions.npy
     # to the correct location for auto evaluation.
-    if dataset == FINAL_TEST_DATASET:  # Assuming amazon is the exam dataset
-        test_output_path = Path("data/exam_text_dataset/predictions.npy")
+    if dataset == FINAL_TEST_DATASET: 
+        test_output_path = output_path / "predictions.npy"
         test_output_path.parent.mkdir(parents=True, exist_ok=True)
         with test_output_path.open("wb") as f:
             np.save(f, test_preds)
@@ -130,6 +141,8 @@ def main_loop(
     if not np.isnan(test_labels).any():
         acc = accuracy_score(test_labels, test_preds)
         logger.info(f"Accuracy on test set: {acc}")
+        with (output_path / "score.yaml").open("a+") as f:
+            yaml.safe_dump({"test_err": float(1-acc)}, f)
         
         # Log detailed classification report for better insight
         logger.info("Classification Report:")
@@ -157,6 +170,12 @@ if __name__ == "__main__":
             "The path to save the predictions to."
             " By default this will just save to the cwd as `./results`."
         )
+    )
+    parser.add_argument(
+        "--load-path",
+        type=Path,
+        default=None,
+        help="The path to resume checkpoint from."
     )
     parser.add_argument(
         "--data-path",
@@ -195,7 +214,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--token-length",
         type=int,
-        default=128,
+        default=512,
         help="The maximum length of tokens to use for the text dataset."
     )
     parser.add_argument(
@@ -244,15 +263,6 @@ if __name__ == "__main__":
         help="The hidden size to use for the model."
     )
     parser.add_argument(
-        "--hpo",
-        action="store_true",
-        default=False,
-        help=(
-            "Whether to run hyperparameter optimization (HPO) using NePS."
-            " If set, the script will use NePS to find the best parameters."
-        )
-    )
-    parser.add_argument(
         "--quiet",
         action="store_true",
         help="Whether to log only warnings and errors."
@@ -274,6 +284,9 @@ if __name__ == "__main__":
     if args.data_path is None:
         args.data_path = Path.cwd().absolute() / ".data"
 
+    args.output_path = Path(args.output_path).absolute()
+    args.output_path.mkdir(parents=True, exist_ok=True)
+
     main_loop(
         dataset=args.dataset,
         output_path=Path(args.output_path).absolute(),
@@ -289,6 +302,6 @@ if __name__ == "__main__":
         ffnn_hidden=args.ffnn_hidden_layer_dim,
         lstm_emb_dim=args.lstm_emb_dim,
         lstm_hidden_dim=args.lstm_hidden_dim,
-        # hpo=args.hpo 
+        load_path=(args.load_path)
     )
 # end of file
