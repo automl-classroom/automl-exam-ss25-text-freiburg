@@ -89,7 +89,6 @@ def main_loop(
         list(range(len(train_df))),
         size=int(data_fraction * len(train_df)),
         replace=False,
-        seed=seed,
     )
     train_df = train_df.iloc[_subsample]
     
