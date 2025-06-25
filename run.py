@@ -56,8 +56,9 @@ def main_loop(
         lstm_emb_dim: int = 128,
         lstm_hidden_dim: int = 128,
         fraction_layers_to_finetune: float = 1.0,
+        data_fraction: int = 1.0,
         load_path: Path = None,
-    ):
+    ) -> None:
     match dataset:
         case "ag_news":
             dataset_class = AGNewsDataset
@@ -83,6 +84,15 @@ def main_loop(
     data_path = Path(data_path) if isinstance(data_path, str) else data_path
     data_info = dataset_class(data_path).create_dataloaders(val_size=val_size, random_state=seed)
     train_df = data_info['train_df']
+    
+    _subsample = np.random.choice(
+        list(range(len(train_df))),
+        size=int(data_fraction * len(train_df)),
+        replace=False,
+        seed=seed,
+    )
+    train_df = train_df.iloc[_subsample]
+    
     val_df = data_info.get('val_df', None)
     test_df = data_info['test_df']
     num_classes = data_info['num_classes']
@@ -150,6 +160,8 @@ def main_loop(
     else:
         # This is the setting for the exam dataset, you will not have access to the labels
         logger.info(f"No test labels available for dataset '{dataset}'")
+
+    return val_err
 
 
 if __name__ == "__main__":

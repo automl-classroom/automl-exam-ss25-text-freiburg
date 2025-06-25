@@ -1,5 +1,6 @@
 import argparse
 from pathlib import Path
+import torch
 import warnings
 import yaml
 
@@ -8,12 +9,29 @@ import neps
 from run import main_loop
 
 
-MODEL_TO_EPOCH_MAP = dict(
-	tfidf=15,
-	lstm=25,
-	transformer=9
+EPOCH_MAP = dict(
+	tfidf={
+		1: 1,
+		3: 5,
+		10: 15,
+	},
+	lstm={
+		1: 3,
+		3: 9,
+		10: 27,
+	},
+	transformer={
+		1: 1,
+		3: 3,
+		10: 9,
+	}
 )
-ABSOLUTE_MIN_EPOCH = 1
+
+MODEL_TO_BATCH_MAP = dict(  # for rtx2080
+	tfidf=512,
+	lstm=256,
+	transformer=32
+)
 
 
 def evaluate_pipeline(
@@ -27,6 +45,10 @@ def evaluate_pipeline(
 		"lstm_hidden_dim": _hidden,
 		"ffnn_hidden": _hidden,
 	})
+
+	# handling batch sizes
+	kwargs.update({"batch_size": MODEL_TO_BATCH_MAP[kwargs["approach"]]})
+
 	# crucial handling of vocab size category types
 	kwargs.update({"vocab_size": int(kwargs["vocab_size"])})
 	# crucial handling of output path
@@ -35,16 +57,21 @@ def evaluate_pipeline(
 	kwargs.update({"data_path": Path(kwargs["data_path"])})
 
 	# handling epoch scaling: fraction -> integer
-	_epoch = max(
-		ABSOLUTE_MIN_EPOCH, 
-		int(kwargs["epochs"] * MODEL_TO_EPOCH_MAP[kwargs["approach"]])
-	)
+	_epoch = EPOCH_MAP[kwargs["approach"]][kwargs["epochs"]]
 	kwargs.update({"epochs": _epoch})
+
 	# crucial handling of resuming
 	kwargs.update({"load_path": previous_pipeline_directory})
 
 	# main call to training loop
-	return main_loop(**kwargs)
+	try:
+		return main_loop(**kwargs)
+	except torch.cuda.OutOfMemoryError as e:
+		print(f"CUDA OOM: {e}")
+		torch.cuda.empty_cache()  # Clear cache
+		return 1
+	except Exception as e:
+		raise e
 
 
 def get_args():

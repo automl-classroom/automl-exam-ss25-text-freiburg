@@ -221,8 +221,7 @@ class TextAutoML:
             start_epoch = _states["epoch"]
             logger.info(f"Resuming from checkpoint at {start_epoch}")
 
-        for epoch in range(start_epoch, self.epochs):
-            torch.cuda.empty_cache()
+        for epoch in range(start_epoch, self.epochs):            
             total_loss = 0
             for batch in train_loader:
                 self.model.train()
@@ -277,7 +276,7 @@ class TextAutoML:
                 },
                 save_path / "checkpoint.pth"
             )   
-
+        torch.cuda.empty_cache()
         return val_acc or 0.0
 
     def _predict(self, val_loader: DataLoader):
