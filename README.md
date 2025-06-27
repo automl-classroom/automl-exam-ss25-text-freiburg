@@ -90,11 +90,11 @@ The following table will provide you an overview of their characteristics and al
 
 | Dataset Name | Labels | Rows | Seq. Length: `min` | Seq. Length: `max` | Seq. Length: `mean` | Seq. Length: `median` | Reference Accuracy |
 | --- | --- |  --- |  --- |  --- | --- | --- | --- |
-| amazon | 3 | 24985 | 4 | 15521 | 512 | 230 | 79.01% |
-| imdb | 2 | 25000 | 52 | 13584 | 1300 | 962 | 87.6% |
-| ag_news | 4 | 120000 | 99 | 1012 | 235 | 231 | 88.61% |
-| dbpedia | 14 | 560000 | 11 | 13573 | 300 | 301 | 97.54% |
-| *final\_exam\_dataset* | TBA | TBA | TBA | TBA | TBA | TBA | TBA
+| amazon | 3 | 24985 | 4 | 15521 | 512 | 230 | 79.022% |
+| imdb | 2 | 25000 | 52 | 13584 | 1300 | 962 | 83.632% |
+| ag_news | 4 | 120000 | 99 | 1012 | 235 | 231 | 88.125% |
+| dbpedia | 14 | 560000 | 11 | 13573 | 300 | 301 | 97.558% |
+| *final\_exam\_dataset* | TBA | TBA | TBA | TBA | TBA | TBA | TBA |
 
 *NOTE*: sequence length calculated at the raw character level
 
