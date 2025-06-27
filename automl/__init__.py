@@ -1,17 +1,8 @@
-# """Text AutoML package for automatic text classification."""
-
 from .core import (
     TextAutoML,
     SimpleFFNN,
     LSTMClassifier,
-    # Uncomment the following lines if you have these classes implemented 
-    # DummyTextClassifier, 
-    # DummyBagOfWords, 
-    # DummyTransformerClassifier,
-    # PretrainedClassifier,
-    # TextDataset,
     SimpleTextDataset,
-    # PretrainedTextDataset
 )
 from .datasets import (
     AGNewsDataset,
@@ -33,4 +24,4 @@ __all__ = [
     'DBpediaDataset',
     'YelpDataset',
 ]
-# end of file# test change
+# end of file

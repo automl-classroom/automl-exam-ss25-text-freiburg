@@ -1,151 +1,127 @@
-# Text AutoML Template
+# AutoML Exam - SS25 (Text Data)
 
-This is a template for automatic text classification that supports multiple datasets and approaches.
+This repo serves as a template for the exam assignment of the AutoML SS25 course
+at the university of Freiburg.
 
-## Project Structure
-
-```
-your_project/
-├── src/
-│   ├── __init__.py           # Package initialization
-│   ├── automl.py             # TextAutoML class and models
-│   └── datasets.py           # Dataset classes
-├── data/                     # Data directory (created automatically)
-│   ├── ag_news/
-│   ├── imdb/
-│   ├── amazon/
-│   └── exam_text_dataset/
-├── run_text.py              # Main execution script
-├── requirements.txt         # Dependencies
-└── README.md               # This file
-```
+The aim of this repo is to provide a minimal installable template to help you get up and running.
 
 ## Installation
 
-1. Install dependencies:
-```bash
-pip install -r requirements.txt
-```
+To install the repository, first create an environment of your choice and activate it. 
 
-2. Download and prepare datasets:
-```bash
-# Quick setup (recommended)
-python setup_data.py
+For example, using `venv`:
 
-# Or manually with Hugging Face datasets
-python download_with_huggingface.py
+You can change the python version here to the version you prefer.
 
-# Or manually with direct downloads
-python download_datasets.py
-```
-
-3. Verify data setup:
-```bash
-python verify_data.py
-```
-
-For detailed setup instructions, see [DATA_SETUP_GUIDE.md](DATA_SETUP_GUIDE.md).
-
-## Usage
-
-The system supports three datasets:
-- `ag_news`: AG News (4-class news categorization)
-- `imdb`: IMDB movie reviews (2-class sentiment)
-- `amazon`: Amazon product reviews (5-class categorization)
-
-### Basic Usage
+**Virtual Environment**
 
 ```bash
-# Run AG News classification
-python run_text.py --dataset ag_news
-
-# Run IMDB sentiment analysis
-python run_text.py --dataset imdb
-
-# Run Amazon reviews classification
-python run_text.py --dataset amazon
-
-# Specify output path and seed
-python run_text.py --dataset ag_news --output-path my_predictions.npy --seed 123
-
-# Run in quiet mode (less logging)
-python run_text.py --dataset imdb --quiet
+python3 -m venv automl-text-env
+source automl-text-env/bin/activate
 ```
 
-## Data Format
+**Conda Environment**
 
-The system expects CSV files with the following format:
-- `text`: The input text to classify
-- `label`: The target class (integer from 0 to num_classes-1)
+Can also use `conda`, left to individual preference.
 
-Example:
-```csv
-text,label
-"This is a sample news article about world events",0
-"Sports match between team A and team B",1
-"Business earnings report from company X",2
-"New technology breakthrough in AI",3
+```bash
+conda create -n automl-text-env python=3.10
+conda activate automl-text-env
 ```
 
-## Automatic Approach Selection
+Then install the repository by running the following command:
 
-The system automatically selects the best approach based on dataset size:
-- **Small datasets (< 500 samples)**: Bag-of-Words + Neural Network
-- **Medium-small datasets (500-2000 samples)**: TF-IDF + Neural Network  
-- **Medium datasets (2000-10000 samples)**: LSTM with embeddings
-- **Medium-large datasets (10000-20000 samples)**: Fine-tuned pretrained models (DistilBERT)
-- **Large datasets (> 20000 samples)**: Custom transformer architecture
-
-See [APPROACHES_GUIDE.md](APPROACHES_GUIDE.md) for detailed explanations of each approach.
-
-## Features
-
-- **Multiple text processing approaches**: Bag-of-Words, TF-IDF, LSTM
-- **Automatic preprocessing**: Lowercasing, punctuation removal, whitespace normalization
-- **Dummy data generation**: Works even without real data files
-- **GPU support**: Automatically uses CUDA if available
-- **Reproducible results**: Seed-based random state control
-- **Flexible architecture**: Easy to extend with new datasets and models
-
-## Extending the System
-
-### Adding a New Dataset
-
-1. Create a new class in `src/datasets.py`:
-```python
-class MyDataset(BaseTextDataset):
-    def get_num_classes(self) -> int:
-        return 3  # Number of classes
-    
-    def load_data(self) -> Tuple[pd.DataFrame, pd.DataFrame]:
-        # Load your data here
-        pass
+```bash
+pip install -e .
 ```
 
-2. Add it to the choices in `run_text.py`
+You can test that the installation was successful by running the following command:
 
-### Adding a New Model
-
-1. Create a new model class in `src/automl.py`:
-```python
-class MyTextModel(nn.Module):
-    def __init__(self, ...):
-        # Initialize your model
-        pass
-    
-    def forward(self, x):
-        # Forward pass
-        pass
+```bash
+python -c "import automl"
 ```
 
-2. Integrate it into the `TextAutoML` class
+We make no restrictions on the python library or version you use, but we recommend using python 3.10 or higher.
 
-## Output
+## Code
 
-The system generates:
-- **Predictions file**: numpy array with predicted class labels
-- **Accuracy metrics**: If test labels are available
-- **Classification report**: Detailed per-class metrics
-- **Training logs**: Loss progression and model selection info
+We provide the following:
 
-For the exam dataset, predictions are also saved to `data/exam_text_dataset/predictions.npy` for automatic grading.
+* `run.py`: A script that trains an _AutoML-System_ on the training split of a given dataset and then
+  generates predictions for the test split, saving those predictions to a file. For the training
+  datasets, the test splits will contain the ground truth labels, but for the test dataset which we provide later the
+  labels of the test split will not be available. You will be expected to generate these labels yourself and submit
+  them to us through GitHub classrooms.
+
+* `automl`: This is a python package that will be installed above and contain your source code for whatever
+  system you would like to build. We have provided a dummy `AutoML` class to serve as an example.
+
+**You are completely free to modify, install new libraries, make changes and in general do whatever you want with the code.** 
+The only requirement for the exam will be that you can generate predictions for the test splits of our datasets in a `.npy` file that we can then use to give you a test score through GitHub classrooms.
+
+
+## Data
+
+We selected 4 different text-classification datasets which you can use to develop your AutoML system and we will provide you with 
+a test dataset to evaluate your system at a later point in time. 
+
+The dataset can be automatically or programatically downloaded and extracted from: `https://ml.informatik.uni-freiburg.de/research-artifacts/automl-exam-25-text/text-phase1.zip`
+
+The downloaded datasets should have the following structure:
+```bash
+<target-folder>
+├── ag_news
+│   ├── train.csv
+│   ├── test.csv
+├── amazon
+│   ├── train.csv
+│   ├── test.csv
+├── imdb
+│   ├── train.csv
+│   ├── test.csv
+├── dbpedia
+│   ├── train.csv
+│   ├── test.csv
+```
+<!-- Feel free to explore the images and the `description.md` files to get a better understanding of the datasets. -->
+The following table will provide you an overview of their characteristics and also a reference value for the accuracy that a naive AutoML system could achieve on these datasets:
+
+| Dataset name | # Classes | # Train samples | # Test samples | # Channels | Resolution | Reference Accuracy |
+|--|--|--|--|--|--|--|
+| ag_news      | 10        | 60,000          | 10,000         | 1          | 28x28      | 0.88               |
+| amazon      | 102*      | 5732            | 2,457          | 3          | 512x512    | 0.55               |
+| imdb     | 7         | 28709           | 7,178          | 1          | 48x48      | 0.40               |
+| dbpedia     | 7         | 28709           | 7,178          | 1          | 48x48      | 0.40               |
+| final test dataset | TBA | TBA | TBA | TBA | TBA | TBA |
+
+
+We will add the test dataset later in the final Github Classroom template code that will be released.
+ <!-- by pushing its class definition to the `datasets.py` file.  -->
+The test dataset will be in the same format as the training datasets, but `test.csv` will only contain `nan`'s for labels.
+
+
+## Running an initial test
+
+This will download the _fashion_ dataset into `./data`, train a dummy AutoML system and generate predictions for the test
+split:
+
+```bash 
+python run.py --dataset fashion --seed 42 --output-path preds-42-fashion.npy
+```
+
+You are free to modify these files and command line arguments as you see fit.
+
+## Final submission
+
+The final test predictions should be uploaded in a file `final_test_preds.npy`, with each line containing the predictions for the input in the exact order of `X_test` given.
+
+Upload your poster as a PDF file named as `final_poster_vision_<team-name>.pdf`, following the template given [here](https://docs.google.com/presentation/d/1T55GFGsoon9a4T_oUm4WXOhW8wMEQL3M/edit?slide=id.p1#slide=id.p1).
+
+## Tips
+
+* If you need to add dependencies that you and your teammates are all on the same page, you can modify the
+  `pyproject.toml` file and add the dependencies there. This will ensure that everyone has the same dependencies
+
+* Please feel free to modify the `.gitignore` file to exclude files generated by your experiments, such as models,
+  predictions, etc. Also, be friendly teammate and ignore your virtual environment and any additional folders/files
+  created by your IDE.
