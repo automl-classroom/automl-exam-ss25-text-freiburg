@@ -166,5 +166,9 @@ class DBpediaDataset(BaseTextDataset):
             test_df = pd.read_csv(test_path)
         else:
             raise FileNotFoundError(f"Data files not found at {train_path}, generating dummy data...")
-        
+
+        # Crucial handling of negative class label
+        train_df['label'] = train_df['label'].replace(-1, self.get_num_classes() - 1)
+        test_df['label'] = test_df['label'].replace(-1, self.get_num_classes() - 1)
+
         return train_df, test_df

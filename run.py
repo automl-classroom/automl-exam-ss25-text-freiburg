@@ -273,17 +273,7 @@ if __name__ == "__main__":
         default=128,
         help="The hidden size to use for the model."
     )
-    parser.add_argument(
-        "--quiet",
-        action="store_true",
-        help="Whether to log only warnings and errors."
-    )
     args = parser.parse_args()
-
-    if not args.quiet:
-        logging.basicConfig(level=logging.INFO)
-    else:
-        logging.basicConfig(level=logging.WARNING)
 
     logger.info(
         f"Running text dataset {args.dataset}"
@@ -297,6 +287,8 @@ if __name__ == "__main__":
 
     args.output_path = Path(args.output_path).absolute()
     args.output_path.mkdir(parents=True, exist_ok=True)
+
+    logging.basicConfig(level=logging.INFO, filename=args.output_path / "hpo.log")
 
     main_loop(
         dataset=args.dataset,

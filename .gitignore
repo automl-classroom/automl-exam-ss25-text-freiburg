@@ -1,4 +1,4 @@
-*.pkl
+.pkl
 *.obj
 
 # dataset_prep/
