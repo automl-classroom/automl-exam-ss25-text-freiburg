@@ -86,14 +86,17 @@ The downloaded datasets should have the following structure:
 <!-- Feel free to explore the images and the `description.md` files to get a better understanding of the datasets. -->
 The following table will provide you an overview of their characteristics and also a reference value for the accuracy that a naive AutoML system could achieve on these datasets:
 
-| Dataset name | # Classes | # Train samples | # Test samples | # Channels | Resolution | Reference Accuracy |
-|--|--|--|--|--|--|--|
-| ag_news      | 10        | 60,000          | 10,000         | 1          | 28x28      | 0.88               |
-| amazon      | 102*      | 5732            | 2,457          | 3          | 512x512    | 0.55               |
-| imdb     | 7         | 28709           | 7,178          | 1          | 48x48      | 0.40               |
-| dbpedia     | 7         | 28709           | 7,178          | 1          | 48x48      | 0.40               |
-| final test dataset | TBA | TBA | TBA | TBA | TBA | TBA |
+### Meta-data for datasets:
 
+| Dataset Name | Labels | Rows | Seq. Length: `min` | Seq. Length: `max` | Seq. Length: `mean` | Seq. Length: `median` | Reference Accuracy |
+| --- | --- |  --- |  --- |  --- | --- | --- | --- |
+| amazon | 3 | 24985 | 4 | 15521 | 512 | 230 | 79.01% |
+| imdb | 2 | 25000 | 52 | 13584 | 1300 | 962 | 87.6% |
+| ag_news | 4 | 120000 | 99 | 1012 | 235 | 231 | 88.61% |
+| dbpedia | 14 | 560000 | 11 | 13573 | 300 | 301 | 97.54% |
+| *final\_exam\_dataset* | TBA | TBA | TBA | TBA | TBA | TBA | TBA
+
+*NOTE*: sequence length calculated at the raw character level
 
 We will add the test dataset later in the final Github Classroom template code that will be released.
  <!-- by pushing its class definition to the `datasets.py` file.  -->
@@ -102,20 +105,20 @@ The test dataset will be in the same format as the training datasets, but `test.
 
 ## Running an initial test
 
-This will download the _fashion_ dataset into `./data`, train a dummy AutoML system and generate predictions for the test
+<!-- This will download the _fashion_ dataset into `./data`, train a dummy AutoML system and generate predictions for the test
 split:
 
 ```bash 
 python run.py --dataset fashion --seed 42 --output-path preds-42-fashion.npy
 ```
 
-You are free to modify these files and command line arguments as you see fit.
+You are free to modify these files and command line arguments as you see fit. -->
 
 ## Final submission
 
 The final test predictions should be uploaded in a file `final_test_preds.npy`, with each line containing the predictions for the input in the exact order of `X_test` given.
 
-Upload your poster as a PDF file named as `final_poster_vision_<team-name>.pdf`, following the template given [here](https://docs.google.com/presentation/d/1T55GFGsoon9a4T_oUm4WXOhW8wMEQL3M/edit?slide=id.p1#slide=id.p1).
+Upload your poster as a PDF file named as `final_poster_text_<team-name>.pdf`, following the template given [here](https://docs.google.com/presentation/d/1T55GFGsoon9a4T_oUm4WXOhW8wMEQL3M/edit?usp=sharing&ouid=118357408080604124767&rtpof=true&sd=true).
 
 ## Tips
 
