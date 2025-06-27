@@ -8,22 +8,57 @@ to a file, which we will grade using github classrooms!
 """
 from __future__ import annotations
 
-from pathlib import Path
-from sklearn.metrics import accuracy_score, classification_report
-import numpy as np
 import argparse
 import logging
+import numpy as np
+from pathlib import Path
+from sklearn.metrics import accuracy_score, classification_report
+import yaml
 
-from src import TextAutoML, AGNewsDataset, IMDBDataset, AmazonReviewsDataset
+# Force the correct path to be first
+# import sys
+# project_root = "/work/dlclarge2/mallik-ss25-automl/text/misc/neeratyoy/automl-exam-ss25-text-freiburg/src"
+# if project_root not in sys.path:
+#     sys.path.insert(0, project_root)
+
+# Verify it's using the right path
+# import automl
+# print(f"DEBUG: Using automl from {automl.__file__}")
+
+from automl.core import TextAutoML
+from automl.datasets import (
+    AGNewsDataset,
+    AmazonReviewsDataset,
+    DBpediaDataset,
+    IMDBDataset,
+    YelpDataset
+)
 
 logger = logging.getLogger(__name__)
 
+FINAL_TEST_DATASET="yelp"
 
-def main(
+
+def main_loop(
         dataset: str,
         output_path: Path,
+        data_path: Path,
         seed: int,
-):
+        approach: str,
+        val_size: float = 0.2,
+        vocab_size: int = 10000,
+        token_length: int = 128,
+        epochs: int = 5,
+        batch_size: int = 32,
+        lr: float = 0.0001,
+        weight_decay: float = 0.01,
+        ffnn_hidden: int = 128,
+        lstm_emb_dim: int = 128,
+        lstm_hidden_dim: int = 128,
+        fraction_layers_to_finetune: float = 1.0,
+        data_fraction: int = 1.0,
+        load_path: Path = None,
+    ) -> None:
     match dataset:
         case "ag_news":
             dataset_class = AGNewsDataset
@@ -31,6 +66,10 @@ def main(
             dataset_class = IMDBDataset
         case "amazon":
             dataset_class = AmazonReviewsDataset
+        case "dbpedia":
+            dataset_class = DBpediaDataset
+        case "yelp":
+            dataset_class = YelpDataset
         case _:
             raise ValueError(f"Invalid dataset: {dataset}")
 
@@ -40,23 +79,69 @@ def main(
     # an example of how your automl system could be used.
     # As a general rule of thumb, you should **never** pass in any
     # test data to your AutoML solution other than to generate predictions.
-    automl = TextAutoML(seed=seed)
+
+    # Get the dataset and create dataloaders
+    data_path = Path(data_path) if isinstance(data_path, str) else data_path
+    data_info = dataset_class(data_path).create_dataloaders(val_size=val_size, random_state=seed)
+    train_df = data_info['train_df']
     
-    # Load the dataset and create a loader then pass it
-    automl.fit(dataset_class)
+    _subsample = np.random.choice(
+        list(range(len(train_df))),
+        size=int(data_fraction * len(train_df)),
+        replace=False,
+    )
+    train_df = train_df.iloc[_subsample]
     
-    # Do the same for the test dataset
-    test_preds, test_labels = automl.predict(dataset_class)
+    val_df = data_info.get('val_df', None)
+    test_df = data_info['test_df']
+    num_classes = data_info['num_classes']
+    logger.info(
+        f"Train size: {len(train_df)}, Validation size: {len(val_df)}, Test size: {len(test_df)}"
+    )
+    logger.info(f"Number of classes: {num_classes}")
+
+    # Initialize the TextAutoML instance with the best parameters
+    automl = TextAutoML(
+        seed=seed,
+        approach=approach,
+        vocab_size=vocab_size,
+        token_length=token_length,
+        epochs=epochs,
+        batch_size=batch_size,
+        lr=lr,
+        weight_decay=weight_decay,
+        ffnn_hidden=ffnn_hidden,
+        lstm_emb_dim=lstm_emb_dim,
+        lstm_hidden_dim=lstm_hidden_dim,
+        fraction_layers_to_finetune=fraction_layers_to_finetune,
+    )
+
+    # Fit the AutoML model on the training and validation datasets
+    val_err = automl.fit(
+        train_df,
+        val_df,
+        num_classes=num_classes,
+        load_path=load_path,
+        save_path=output_path,
+    )
+    logger.info("Training complete")
+
+    # Predict on the test set
+    test_preds, test_labels = automl.predict(test_df)
 
     # Write the predictions of X_test to disk
     logger.info("Writing predictions to disk")
-    with output_path.open("wb") as f:
+    with (output_path / "score.yaml").open("w") as f:
+        yaml.safe_dump({"val_err": float(val_err)}, f)
+    logger.info(f"Saved validataion score at {output_path / 'score.yaml'}")
+    with (output_path / "test_preds.npy").open("wb") as f:
         np.save(f, test_preds)
+    logger.info(f"Saved tet prediction at {output_path / 'test_preds.npy'}")
 
     # In case of running on the final exam data, also add the predictions.npy
     # to the correct location for auto evaluation.
-    if dataset == "amazon":  # Assuming amazon is the exam dataset
-        test_output_path = Path("data/exam_text_dataset/predictions.npy")
+    if dataset == FINAL_TEST_DATASET: 
+        test_output_path = output_path / "predictions.npy"
         test_output_path.parent.mkdir(parents=True, exist_ok=True)
         with test_output_path.open("wb") as f:
             np.save(f, test_preds)
@@ -65,6 +150,8 @@ def main(
     if not np.isnan(test_labels).any():
         acc = accuracy_score(test_labels, test_preds)
         logger.info(f"Accuracy on test set: {acc}")
+        with (output_path / "score.yaml").open("a+") as f:
+            yaml.safe_dump({"test_err": float(1-acc)}, f)
         
         # Log detailed classification report for better insight
         logger.info("Classification Report:")
@@ -72,6 +159,8 @@ def main(
     else:
         # This is the setting for the exam dataset, you will not have access to the labels
         logger.info(f"No test labels available for dataset '{dataset}'")
+
+    return val_err
 
 
 if __name__ == "__main__":
@@ -82,15 +171,30 @@ if __name__ == "__main__":
         type=str,
         required=True,
         help="The name of the dataset to run on.",
-        choices=["ag_news", "imdb", "amazon"]
+        choices=["ag_news", "imdb", "amazon", "dbpedia", "yelp"]
     )
     parser.add_argument(
         "--output-path",
         type=Path,
-        default=Path("text_predictions.npy"),
+        default=None,
         help=(
             "The path to save the predictions to."
-            " By default this will just save to './text_predictions.npy'."
+            " By default this will just save to the cwd as `./results`."
+        )
+    )
+    parser.add_argument(
+        "--load-path",
+        type=Path,
+        default=None,
+        help="The path to resume checkpoint from."
+    )
+    parser.add_argument(
+        "--data-path",
+        type=Path,
+        default=None,
+        help=(
+            "The path to laod the data from."
+            " By default this will look up cwd for `./.data/`."
         )
     )
     parser.add_argument(
@@ -103,25 +207,104 @@ if __name__ == "__main__":
         )
     )
     parser.add_argument(
-        "--quiet",
-        action="store_true",
-        help="Whether to log only warnings and errors."
+        "--approach",
+        type=str,
+        default="transformer",
+        choices=["tfidf", "lstm", "transformer"],
+        help=(
+            "The approach to use for the AutoML system. "
+            "Options are 'tfidf', 'lstm', or 'transformer'."
+        )
+    )
+    parser.add_argument(
+        "--vocab-size",
+        type=int,
+        default=10000,
+        help="The size of the vocabulary to use for the text dataset."
+    )
+    parser.add_argument(
+        "--token-length",
+        type=int,
+        default=512,
+        help="The maximum length of tokens to use for the text dataset."
+    )
+    parser.add_argument(
+        "--epochs",
+        type=int,
+        default=5,
+        help="The number of epochs to train the model for."
+    )
+    parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=32,
+        help="The batch size to use for training and evaluation."
+    )
+    parser.add_argument(
+        "--lr",
+        type=float,
+        default=0.0001,
+        help="The learning rate to use for the optimizer."
+    )
+    parser.add_argument(
+        "--weight-decay",
+        type=float,
+        default=0.01,
+        help="The weight decay to use for the optimizer."
     )
 
-    args = parser.parse_args()
+    parser.add_argument(
+        "--lstm-emb-dim",
+        type=int,
+        default=128,
+        help="The embedding dimension to use for the LSTM model."
+    )
 
-    if not args.quiet:
-        logging.basicConfig(level=logging.INFO)
-    else:
-        logging.basicConfig(level=logging.WARNING)
+    parser.add_argument(
+        "--lstm-hidden-dim",
+        type=int,
+        default=128,
+        help="The hidden size to use for the LSTM model."
+    )
+
+    parser.add_argument(
+        "--ffnn-hidden-layer-dim",
+        type=int,
+        default=128,
+        help="The hidden size to use for the model."
+    )
+    args = parser.parse_args()
 
     logger.info(
         f"Running text dataset {args.dataset}"
         f"\n{args}"
     )
 
-    main(
+    if args.output_path is None:
+        args.output_path =  Path.cwd().absolute() / "results"
+    if args.data_path is None:
+        args.data_path = Path.cwd().absolute() / ".data"
+
+    args.output_path = Path(args.output_path).absolute()
+    args.output_path.mkdir(parents=True, exist_ok=True)
+
+    logging.basicConfig(level=logging.INFO, filename=args.output_path / "hpo.log")
+
+    main_loop(
         dataset=args.dataset,
-        output_path=args.output_path,
+        output_path=Path(args.output_path).absolute(),
+        data_path=Path(args.data_path).absolute(),
         seed=args.seed,
+        approach=args.approach,
+        vocab_size=args.vocab_size,
+        token_length=args.token_length,
+        epochs=args.epochs,
+        batch_size=args.batch_size,
+        lr=args.lr,
+        weight_decay=args.weight_decay,
+        ffnn_hidden=args.ffnn_hidden_layer_dim,
+        lstm_emb_dim=args.lstm_emb_dim,
+        lstm_hidden_dim=args.lstm_hidden_dim,
+        load_path=(args.load_path)
     )
+# end of file
