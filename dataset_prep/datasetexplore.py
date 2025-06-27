@@ -4,6 +4,9 @@ import numpy as np
 import os
 import pandas as pd
 from pathlib import Path
+import yaml
+
+from sklearn.metrics import accuracy_score, classification_report
 
 
 FINAL_EXAM_DATASET = "yelp"
@@ -97,6 +100,55 @@ def quick_plot(
     _plot_path = Path(summary_path).absolute() / filename
     plt.savefig(_plot_path, dpi=100)
     print(f"Saved at {_plot_path}")
+
+
+def get_test_scores(
+    data_path: Path,
+    data_name: str,
+    output_path: Path
+) -> float:
+    if not (output_path / "test_preds.npy").exists:
+        return None
+
+    test = pd.read_csv(data_path / data_name / "test.csv")
+    labels = test["label"]
+
+    with open(output_path / "test_preds.npy", "rb") as f:
+        test_preds = np.load(f)
+
+    return accuracy_score(labels, test_preds) * 100
+
+
+def get_test_score_distribution(
+    data_path: Path,
+    data_name: str,
+    root_directory: Path
+):
+    if (root_directory / "configs").exists():
+        root_directory = root_directory / "configs"
+    assert (root_directory /  "config_1_0").exists(), f"`root_directort` level is not correct!"
+
+    scores = []
+    for path in root_directory.iterdir():
+        if not path.is_dir():
+            continue
+        try:
+            with open(path / "score.yaml", "r") as f:
+                _score = yaml.safe_load(f)["test_err"]
+            # output_path = path
+            # with open(output_path / "score.yaml")
+            # _score = get_test_scores(data_path, data_name, output_path)
+            # if _score is not None:
+            scores.append((1 - _score) * 100)
+        except Exception as e:
+            pass
+    
+    print(min(scores))
+    for p in [10, 25, 50, 75, 90]:
+        print(np.percentile(scores, p))
+    print(max(scores))
+    print()
+    print(f"Total entries: {len(scores)}")
 
 
 if __name__ == "__main__":
