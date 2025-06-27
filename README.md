@@ -35,10 +35,13 @@ Then install the repository by running the following command:
 pip install -e .
 ```
 
+*NOTE*: this is an editable install which allows you to edit the package code without requiring re-installations.
+
 You can test that the installation was successful by running the following command:
 
 ```bash
-python -c "import automl"
+python -c "import automl; print(automl.__file__)"
+# this should print the full path to your cloned install of this repo
 ```
 
 We make no restrictions on the python library or version you use, but we recommend using python 3.10 or higher.
@@ -47,17 +50,17 @@ We make no restrictions on the python library or version you use, but we recomme
 
 We provide the following:
 
-* `run.py`: A script that trains an _AutoML-System_ on the training split of a given dataset and then
-  generates predictions for the test split, saving those predictions to a file. For the training
-  datasets, the test splits will contain the ground truth labels, but for the test dataset which we provide later the
-  labels of the test split will not be available. You will be expected to generate these labels yourself and submit
-  them to us through GitHub classrooms.
+* `run.py`: A script that trains an _AutoML-System_ on the training split of a given dataset and 
+  then generates predictions for the test split, saving those predictions to a file. 
+  For the training datasets, the test splits will contain the ground truth labels, but for the 
+  test dataset which we provide later the labels of the test split will not be available. 
+  You will be expected to generate these labels yourself and submit them to us through GitHub classrooms.
 
 * `automl`: This is a python package that will be installed above and contain your source code for whatever
   system you would like to build. We have provided a dummy `AutoML` class to serve as an example.
 
-**You are completely free to modify, install new libraries, make changes and in general do whatever you want with the code.** 
-The only requirement for the exam will be that you can generate predictions for the test splits of our datasets in a `.npy` file that we can then use to give you a test score through GitHub classrooms.
+*You are completely free to modify, install new libraries, make changes and in general do whatever you want with the code.* 
+The *only requirement* for the exam will be that you can generate predictions for the test splits of our datasets in a `.npy` file that we can then use to give you a test score through GitHub classrooms.
 
 
 ## Data
@@ -65,7 +68,7 @@ The only requirement for the exam will be that you can generate predictions for 
 We selected 4 different text-classification datasets which you can use to develop your AutoML system and we will provide you with 
 a test dataset to evaluate your system at a later point in time. 
 
-The dataset can be automatically or programatically downloaded and extracted from: `https://ml.informatik.uni-freiburg.de/research-artifacts/automl-exam-25-text/text-phase1.zip`
+The dataset can be automatically or programatically downloaded and extracted from: [https://ml.informatik.uni-freiburg.de/research-artifacts/automl-exam-25-text/text-phase1.zip](https://ml.informatik.uni-freiburg.de/research-artifacts/automl-exam-25-text/text-phase1.zip)
 
 The downloaded datasets should have the following structure:
 ```bash
@@ -83,17 +86,18 @@ The downloaded datasets should have the following structure:
 │   ├── train.csv
 │   ├── test.csv
 ```
-<!-- Feel free to explore the images and the `description.md` files to get a better understanding of the datasets. -->
-The following table will provide you an overview of their characteristics and also a reference value for the accuracy that a naive AutoML system could achieve on these datasets:
 
 ### Meta-data for datasets:
 
+The following table will provide you an overview of their characteristics and also a reference value for the test accuracy.
+*NOTE*: These scores were obtained through a rather simple HPO on a crudely constructed search space, for an undisclosed HPO budget and compute resources.
+
 | Dataset Name | Labels | Rows | Seq. Length: `min` | Seq. Length: `max` | Seq. Length: `mean` | Seq. Length: `median` | Reference Accuracy |
 | --- | --- |  --- |  --- |  --- | --- | --- | --- |
-| amazon | 3 | 24985 | 4 | 15521 | 512 | 230 | 79.022% |
-| imdb | 2 | 25000 | 52 | 13584 | 1300 | 962 | 83.632% |
-| ag_news | 4 | 120000 | 99 | 1012 | 235 | 231 | 88.125% |
-| dbpedia | 14 | 560000 | 11 | 13573 | 300 | 301 | 97.558% |
+| amazon | 3 | 24985 | 4 | 15521 | 512 | 230 | 81.799% |
+| imdb | 2 | 25000 | 52 | 13584 | 1300 | 962 | 86.993% |
+| ag_news | 4 | 120000 | 99 | 1012 | 235 | 231 | 90.265% |
+| dbpedia | 14 | 560000 | 11 | 13573 | 300 | 301 | 97.882% |
 | *final\_exam\_dataset* | TBA | TBA | TBA | TBA | TBA | TBA | TBA |
 
 *NOTE*: sequence length calculated at the raw character level
@@ -105,20 +109,21 @@ The test dataset will be in the same format as the training datasets, but `test.
 
 ## Running an initial test
 
-<!-- This will download the _fashion_ dataset into `./data`, train a dummy AutoML system and generate predictions for the test
-split:
+After having downloaded and extracted the data at a suitable location, this is the parent data directory. \\
+To run a quick test:
 
-```bash 
-python run.py --dataset fashion --seed 42 --output-path preds-42-fashion.npy
+```bash
+python run.py --data-path <path-to-downloaded-data> --dataset amazon --epochs 1
 ```
+*TIP*: play with the batch size and different approaches for an epoch (or few mini-batches) to estimate compute requirements given your hardware availability.
 
-You are free to modify these files and command line arguments as you see fit. -->
+You are free to modify these files and command line arguments as you see fit.
 
-## Final submission
+<!-- ## Final submission
 
 The final test predictions should be uploaded in a file `final_test_preds.npy`, with each line containing the predictions for the input in the exact order of `X_test` given.
 
-Upload your poster as a PDF file named as `final_poster_text_<team-name>.pdf`, following the template given [here](https://docs.google.com/presentation/d/1T55GFGsoon9a4T_oUm4WXOhW8wMEQL3M/edit?usp=sharing&ouid=118357408080604124767&rtpof=true&sd=true).
+Upload your poster as a PDF file named as `final_poster_text_<team-name>.pdf`, following the template given [here](https://docs.google.com/presentation/d/1T55GFGsoon9a4T_oUm4WXOhW8wMEQL3M/edit?usp=sharing&ouid=118357408080604124767&rtpof=true&sd=true). -->
 
 ## Tips
 

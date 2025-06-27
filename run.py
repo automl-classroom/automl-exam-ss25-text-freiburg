@@ -1,10 +1,17 @@
-"""An example run file which trains a dummy NLP AutoML system on the training split of a dataset
-and logs the accuracy score on the test set.
+"""A STARTER KIT SCRIPT for SS25 AutoML Exam --- Modality III: Text
 
-In the example data you are given access to the labels of the test split, however
-in the test dataset we will provide later, you will not have access
-to this and you will need to output your predictions for the text of the test set
-to a file, which we will grade using github classrooms!
+You are not expected to follow this script or be constrained to it.
+
+For a test run:
+1) Download datasets (see, README) at chosen path
+2) Run the script: 
+```
+python run.py \
+    --data-path <path-to-downloaded-data> \
+    --dataset amazon \
+    --epochs 1
+```
+
 """
 from __future__ import annotations
 
@@ -15,28 +22,17 @@ from pathlib import Path
 from sklearn.metrics import accuracy_score, classification_report
 import yaml
 
-# Force the correct path to be first
-# import sys
-# project_root = "/work/dlclarge2/mallik-ss25-automl/text/misc/neeratyoy/automl-exam-ss25-text-freiburg/src"
-# if project_root not in sys.path:
-#     sys.path.insert(0, project_root)
-
-# Verify it's using the right path
-# import automl
-# print(f"DEBUG: Using automl from {automl.__file__}")
-
 from automl.core import TextAutoML
 from automl.datasets import (
     AGNewsDataset,
     AmazonReviewsDataset,
     DBpediaDataset,
     IMDBDataset,
-    YelpDataset
 )
 
 logger = logging.getLogger(__name__)
 
-FINAL_TEST_DATASET="yelp"
+FINAL_TEST_DATASET=...  # TBA later
 
 
 def main_loop(
@@ -68,15 +64,13 @@ def main_loop(
             dataset_class = AmazonReviewsDataset
         case "dbpedia":
             dataset_class = DBpediaDataset
-        case "yelp":
-            dataset_class = YelpDataset
         case _:
             raise ValueError(f"Invalid dataset: {dataset}")
 
     logger.info("Fitting Text AutoML")
 
     # You do not need to follow this setup or API it's merely here to provide
-    # an example of how your automl system could be used.
+    # an example of how your AutoML system could be used.
     # As a general rule of thumb, you should **never** pass in any
     # test data to your AutoML solution other than to generate predictions.
 
@@ -171,7 +165,7 @@ if __name__ == "__main__":
         type=str,
         required=True,
         help="The name of the dataset to run on.",
-        choices=["ag_news", "imdb", "amazon", "dbpedia", "yelp"]
+        choices=["ag_news", "imdb", "amazon", "dbpedia",]
     )
     parser.add_argument(
         "--output-path",
@@ -219,13 +213,13 @@ if __name__ == "__main__":
     parser.add_argument(
         "--vocab-size",
         type=int,
-        default=10000,
+        default=1000,
         help="The size of the vocabulary to use for the text dataset."
     )
     parser.add_argument(
         "--token-length",
         type=int,
-        default=512,
+        default=128,
         help="The maximum length of tokens to use for the text dataset."
     )
     parser.add_argument(
@@ -243,7 +237,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--lr",
         type=float,
-        default=0.0001,
+        default=0.01,
         help="The learning rate to use for the optimizer."
     )
     parser.add_argument(
@@ -256,39 +250,48 @@ if __name__ == "__main__":
     parser.add_argument(
         "--lstm-emb-dim",
         type=int,
-        default=128,
+        default=64,
         help="The embedding dimension to use for the LSTM model."
     )
 
     parser.add_argument(
         "--lstm-hidden-dim",
         type=int,
-        default=128,
+        default=64,
         help="The hidden size to use for the LSTM model."
     )
 
     parser.add_argument(
         "--ffnn-hidden-layer-dim",
         type=int,
-        default=128,
+        default=64,
         help="The hidden size to use for the model."
+    )
+
+    parser.add_argument(
+        "--data-fraction",
+        type=float,
+        default=1,
+        help="Subsampling of training set, in fraction (0, 1]."
     )
     args = parser.parse_args()
 
-    logger.info(
-        f"Running text dataset {args.dataset}"
-        f"\n{args}"
-    )
+    logger.info(f"Running text dataset {args.dataset}\n{args}")
 
     if args.output_path is None:
-        args.output_path =  Path.cwd().absolute() / "results"
+        args.output_path =  (
+            Path.cwd().absolute() / 
+            "results" / 
+            f"dataset={args.dataset}" / 
+            f"seed={args.seed}"
+        )
     if args.data_path is None:
         args.data_path = Path.cwd().absolute() / ".data"
 
     args.output_path = Path(args.output_path).absolute()
     args.output_path.mkdir(parents=True, exist_ok=True)
 
-    logging.basicConfig(level=logging.INFO, filename=args.output_path / "hpo.log")
+    logging.basicConfig(level=logging.INFO, filename=args.output_path / "run.log")
 
     main_loop(
         dataset=args.dataset,
@@ -305,6 +308,7 @@ if __name__ == "__main__":
         ffnn_hidden=args.ffnn_hidden_layer_dim,
         lstm_emb_dim=args.lstm_emb_dim,
         lstm_hidden_dim=args.lstm_hidden_dim,
-        load_path=(args.load_path)
+        data_fraction=args.data_fraction,
+        load_path=Path(args.load_path) if args.load_path is not None else None
     )
 # end of file

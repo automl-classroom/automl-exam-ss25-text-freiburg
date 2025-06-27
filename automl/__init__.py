@@ -9,7 +9,6 @@ from .datasets import (
     IMDBDataset,
     AmazonReviewsDataset,
     DBpediaDataset,
-    YelpDataset,
 )
 
 
@@ -22,6 +21,5 @@ __all__ = [
     'IMDBDataset', 
     'AmazonReviewsDataset',
     'DBpediaDataset',
-    'YelpDataset',
 ]
 # end of file
