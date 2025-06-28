@@ -135,10 +135,6 @@ def get_test_score_distribution(
         try:
             with open(path / "score.yaml", "r") as f:
                 _score = yaml.safe_load(f)["test_err"]
-            # output_path = path
-            # with open(output_path / "score.yaml")
-            # _score = get_test_scores(data_path, data_name, output_path)
-            # if _score is not None:
             scores.append((1 - _score) * 100)
         except Exception as e:
             pass
