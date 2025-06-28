@@ -113,7 +113,11 @@ After having downloaded and extracted the data at a suitable location, this is t
 To run a quick test:
 
 ```bash
-python run.py --data-path <path-to-downloaded-data> --dataset amazon --epochs 1
+python run.py \
+  --data-path <path-to-data-parent> \
+  --dataset amazon \
+  --epochs 1 \
+  --data-fraction 0.2
 ```
 *TIP*: play with the batch size and different approaches for an epoch (or few mini-batches) to estimate compute requirements given your hardware availability.
 
